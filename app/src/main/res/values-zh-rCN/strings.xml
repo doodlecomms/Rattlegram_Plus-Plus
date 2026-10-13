@@ -194,4 +194,6 @@ COFDMTV 解码器生成的文本消息是唯一存储在设备持久存储中的
 	<string name="password_scan_prompt">将相机对准密码二维码</string>
 	<string name="password_scanned">已从二维码填入密码。点击“确定”以使用。</string>
 	<string name="password_clipboard_empty">没有可粘贴的内容。请先复制密码。</string>
+	<string name="delete_messages_on_close">关闭时删除消息</string>
+	<string name="delete_messages_on_close_prompt">每次关闭应用时，所有消息都将被永久删除。确定启用吗？</string>
 </resources>

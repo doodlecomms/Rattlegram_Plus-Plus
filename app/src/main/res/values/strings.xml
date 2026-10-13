@@ -191,4 +191,6 @@ The resulting text message from the COFDMTV decoder is the only data that gets s
 	<string name="password_scan_prompt">Point the camera at the password QR code</string>
 	<string name="password_scanned">Password filled in from the QR code. Tap Okay to use it.</string>
 	<string name="password_clipboard_empty">Nothing to paste. Copy the password first.</string>
+	<string name="delete_messages_on_close">Delete Messages on Close</string>
+	<string name="delete_messages_on_close_prompt">All messages will be permanently deleted every time the app is closed. Enable this?</string>
 </resources>

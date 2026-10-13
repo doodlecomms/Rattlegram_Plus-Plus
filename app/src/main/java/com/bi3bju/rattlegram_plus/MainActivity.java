@@ -128,6 +128,7 @@ public class MainActivity extends AppCompatActivity {
     private boolean fancyHeader;
     private boolean repeaterMode;
     private boolean encryptMessage;
+    private boolean deleteMessagesOnClose;
     private boolean showSpectrum;
     private boolean ultrasonicEnabled;
     private int spectrumTint;
@@ -690,6 +691,7 @@ public class MainActivity extends AppCompatActivity {
         state.putBoolean("fancyHeader", fancyHeader);
         state.putBoolean("repeaterMode", repeaterMode);
         state.putBoolean("encryptMessage", encryptMessage);
+        state.putBoolean("deleteMessagesOnClose", deleteMessagesOnClose);
         for (int i = 0; i < messages.getCount(); ++i)
             state.putString("m" + i, messages.getItem(i));
         super.onSaveInstanceState(state);
@@ -713,6 +715,7 @@ public class MainActivity extends AppCompatActivity {
         edit.putBoolean("fancyHeader", fancyHeader);
         edit.putBoolean("repeaterMode", repeaterMode);
         edit.putBoolean("encryptMessage", encryptMessage);
+        edit.putBoolean("deleteMessagesOnClose", deleteMessagesOnClose);
         for (int i = 0; i < messages.getCount(); ++i)
             edit.putString("m" + i, messages.getItem(i));
         edit.apply();
@@ -832,6 +835,7 @@ public class MainActivity extends AppCompatActivity {
         final boolean defaultFancyHeader = false;
         final boolean defaultRepeaterMode = false;
         final boolean defaultEncryptMessage = false;
+        final boolean defaultDeleteMessagesOnClose = false;
         if (state == null) {
             SharedPreferences pref = getPreferences(Context.MODE_PRIVATE);
             AppCompatDelegate.setDefaultNightMode(pref.getInt("nightMode", AppCompatDelegate.getDefaultNightMode()));
@@ -849,6 +853,11 @@ public class MainActivity extends AppCompatActivity {
             fancyHeader = pref.getBoolean("fancyHeader", defaultFancyHeader);
             repeaterMode = pref.getBoolean("repeaterMode", defaultRepeaterMode);
             encryptMessage = pref.getBoolean("encryptMessage", defaultEncryptMessage);
+            deleteMessagesOnClose = pref.getBoolean("deleteMessagesOnClose", defaultDeleteMessagesOnClose);
+            // A fresh start means the app was closed since it was last used. Closing by swiping the
+            // app away gives no reliable chance to clean up, so finish the job here.
+            if (deleteMessagesOnClose)
+                clearStoredMessages();
             for (int i = 0; i < 100; ++i) {
                 String mesg = pref.getString("m" + i, null);
                 if (mesg != null)
@@ -870,6 +879,7 @@ public class MainActivity extends AppCompatActivity {
             fancyHeader = state.getBoolean("fancyHeader", defaultFancyHeader);
             repeaterMode = state.getBoolean("repeaterMode", defaultRepeaterMode);
             encryptMessage = state.getBoolean("encryptMessage", defaultEncryptMessage);
+            deleteMessagesOnClose = state.getBoolean("deleteMessagesOnClose", defaultDeleteMessagesOnClose);
             for (int i = 0; i < 100; ++i) {
                 String mesg = state.getString("m" + i, null);
                 if (mesg != null)
@@ -1341,6 +1351,10 @@ public class MainActivity extends AppCompatActivity {
             menu.findItem(R.id.action_disable_fancy_header).setChecked(true);
     }
 
+    private void updateDeleteMessagesOnCloseMenu() {
+        menu.findItem(R.id.action_delete_on_close).setChecked(deleteMessagesOnClose);
+    }
+
     private void setRepeaterMode(boolean newRepeaterMode) {
         if (repeaterMode == newRepeaterMode)
             return;
@@ -1491,6 +1505,7 @@ public class MainActivity extends AppCompatActivity {
         updateRepeaterDebounceMenu();
         updateFancyHeaderMenu();
         updateRepeaterModeMenu();
+        updateDeleteMessagesOnCloseMenu();
         return true;
     }
 
@@ -1564,6 +1579,10 @@ public class MainActivity extends AppCompatActivity {
         if (id == R.id.action_delete_messages) {
             if (messages.getCount() > 0)
                 deleteMessages();
+            return true;
+        }
+        if (id == R.id.action_delete_on_close) {
+            toggleDeleteMessagesOnClose();
             return true;
         }
         if (id == R.id.action_enable_ultrasonic) {
@@ -1792,13 +1811,33 @@ public class MainActivity extends AppCompatActivity {
         AlertDialog.Builder builder = new AlertDialog.Builder(this, R.style.Theme_AlertDialog);
         builder.setTitle(R.string.delete_messages)
                 .setMessage(R.string.delete_messages_prompt)
-                .setPositiveButton(R.string.delete, (dialog, which) -> {
-                    messages.clear();
-                    SharedPreferences pref = getPreferences(Context.MODE_PRIVATE);
-                    SharedPreferences.Editor editor = pref.edit();
-                    for (int i = 0; i < 100; ++i)
-                        editor.remove("m" + i);
-                    editor.apply();
+                .setPositiveButton(R.string.delete, (dialog, which) -> clearStoredMessages())
+                .setNegativeButton(R.string.cancel, null)
+                .show();
+    }
+
+    private void clearStoredMessages() {
+        messages.clear();
+        SharedPreferences pref = getPreferences(Context.MODE_PRIVATE);
+        SharedPreferences.Editor editor = pref.edit();
+        for (int i = 0; i < 100; ++i)
+            editor.remove("m" + i);
+        // commit rather than apply: this can run while the app is shutting down
+        editor.commit();
+    }
+
+    private void toggleDeleteMessagesOnClose() {
+        if (deleteMessagesOnClose) {
+            deleteMessagesOnClose = false;
+            updateDeleteMessagesOnCloseMenu();
+            return;
+        }
+        AlertDialog.Builder builder = new AlertDialog.Builder(this, R.style.Theme_AlertDialog);
+        builder.setTitle(R.string.delete_messages_on_close)
+                .setMessage(R.string.delete_messages_on_close_prompt)
+                .setPositiveButton(R.string.enable, (dialog, which) -> {
+                    deleteMessagesOnClose = true;
+                    updateDeleteMessagesOnCloseMenu();
                 })
                 .setNegativeButton(R.string.cancel, null)
                 .show();
@@ -1810,6 +1849,8 @@ public class MainActivity extends AppCompatActivity {
                 .setMessage(R.string.force_quit_prompt)
                 .setPositiveButton(R.string.quit, (dialog, which) -> {
                     storeSettings();
+                    if (deleteMessagesOnClose)
+                        clearStoredMessages();
                     System.exit(0);
                 })
                 .setNegativeButton(R.string.cancel, null)
@@ -2387,6 +2428,9 @@ public class MainActivity extends AppCompatActivity {
 
     @Override
     protected void onDestroy() {
+        // isFinishing() is false for a screen rotation, so only a real close wipes the messages
+        if (isFinishing() && deleteMessagesOnClose)
+            clearStoredMessages();
         stopBeacon();
         if (audioTrack != null) audioTrack.stop();
         destroyEncoder();
