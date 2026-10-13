@@ -127,6 +127,7 @@ public class MainActivity extends AppCompatActivity {
     private AudioTrack audioTrack;
     private boolean fancyHeader;
     private boolean repeaterMode;
+    private boolean encryptMessage;
     private boolean showSpectrum;
     private boolean ultrasonicEnabled;
     private int spectrumTint;
@@ -688,6 +689,7 @@ public class MainActivity extends AppCompatActivity {
         state.putString("draftText", draftText);
         state.putBoolean("fancyHeader", fancyHeader);
         state.putBoolean("repeaterMode", repeaterMode);
+        state.putBoolean("encryptMessage", encryptMessage);
         for (int i = 0; i < messages.getCount(); ++i)
             state.putString("m" + i, messages.getItem(i));
         super.onSaveInstanceState(state);
@@ -710,6 +712,7 @@ public class MainActivity extends AppCompatActivity {
         edit.putString("draftText", draftText);
         edit.putBoolean("fancyHeader", fancyHeader);
         edit.putBoolean("repeaterMode", repeaterMode);
+        edit.putBoolean("encryptMessage", encryptMessage);
         for (int i = 0; i < messages.getCount(); ++i)
             edit.putString("m" + i, messages.getItem(i));
         edit.apply();
@@ -828,6 +831,7 @@ public class MainActivity extends AppCompatActivity {
         final String defaultDraftText = "";
         final boolean defaultFancyHeader = false;
         final boolean defaultRepeaterMode = false;
+        final boolean defaultEncryptMessage = false;
         if (state == null) {
             SharedPreferences pref = getPreferences(Context.MODE_PRIVATE);
             AppCompatDelegate.setDefaultNightMode(pref.getInt("nightMode", AppCompatDelegate.getDefaultNightMode()));
@@ -844,6 +848,7 @@ public class MainActivity extends AppCompatActivity {
             draftText = pref.getString("draftText", defaultDraftText);
             fancyHeader = pref.getBoolean("fancyHeader", defaultFancyHeader);
             repeaterMode = pref.getBoolean("repeaterMode", defaultRepeaterMode);
+            encryptMessage = pref.getBoolean("encryptMessage", defaultEncryptMessage);
             for (int i = 0; i < 100; ++i) {
                 String mesg = pref.getString("m" + i, null);
                 if (mesg != null)
@@ -864,6 +869,7 @@ public class MainActivity extends AppCompatActivity {
             draftText = state.getString("draftText", defaultDraftText);
             fancyHeader = state.getBoolean("fancyHeader", defaultFancyHeader);
             repeaterMode = state.getBoolean("repeaterMode", defaultRepeaterMode);
+            encryptMessage = state.getBoolean("encryptMessage", defaultEncryptMessage);
             for (int i = 0; i < 100; ++i) {
                 String mesg = state.getString("m" + i, null);
                 if (mesg != null)
@@ -1850,9 +1856,8 @@ public class MainActivity extends AppCompatActivity {
         boolean isLocationMsg = temp != null && temp.contains("[geo:");
         boolean hasPassword = password != null && !password.isEmpty();
         encryptCheck.setEnabled(hasPassword && !isLocationMsg);
-        if (!hasPassword || isLocationMsg) {
-            encryptCheck.setChecked(false);
-        }
+        // Restore the last choice; the stored choice is only changed by the user toggling the box
+        encryptCheck.setChecked(hasPassword && !isLocationMsg && encryptMessage);
 
         AlertDialog.Builder builder = new AlertDialog.Builder(this, R.style.Theme_AlertDialog);
         builder.setTitle(R.string.compose_message);
@@ -1929,6 +1934,7 @@ public class MainActivity extends AppCompatActivity {
         edit.addTextChangedListener(textWatcher);
 
         encryptCheck.setOnCheckedChangeListener((buttonView, isChecked) -> {
+            encryptMessage = isChecked;
             String text = edit.getText().toString();
             textWatcher.onTextChanged(text, 0, 0, 0);
         });
