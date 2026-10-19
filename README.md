@@ -1,5 +1,13 @@
 # Rattlegram Plus Plus
 
+<p align="center">
+  <a href="https://github.com/doodlecomms/Rattlegram_Plus-Plus/releases/latest/download/RattlegramPlusPlus.apk"><img alt="Download the latest APK" src="https://img.shields.io/badge/%E2%AC%87%20Download-Latest%20APK-orange?style=for-the-badge&logo=android&logoColor=white" height="56"></a>
+</p>
+<p align="center">
+  <b>On your phone?</b> Tap the button above. <b>On a computer?</b> Scan this with your phone:<br>
+  <a href="https://github.com/doodlecomms/Rattlegram_Plus-Plus/releases/latest/download/RattlegramPlusPlus.apk"><img alt="QR code: download the latest APK" src="docs/download-qr.png" width="180"></a>
+</p>
+
 Short text messages sent as sound — through the phone's speaker and microphone, a cable to a radio, or **wirelessly over Bluetooth to a BTech UV-Pro / Vero VR-N76**. No Wi-Fi or cellular network needed.
 
 Rattlegram Plus Plus is an independent fork of [Rattlegram Plus](https://github.com/BI3BJU/Rattlegram_Plus) by BI3BJU, which itself builds on [Rattlegram](https://github.com/aicodix/rattlegram) by aicodix. It installs **alongside** Rattlegram Plus (it has its own app ID) and uses the same over-the-air format, so messages, pings and encrypted messages (with the same password) should work between the two apps.
@@ -29,7 +37,7 @@ Rattlegram Plus Plus is an independent fork of [Rattlegram Plus](https://github.
 
 ## Install
 
-1. Download the latest APK from the [Releases page](https://github.com/doodlecomms/Rattlegram_Plus-Plus/releases).
+1. Download the latest APK: **[RattlegramPlusPlus.apk](https://github.com/doodlecomms/Rattlegram_Plus-Plus/releases/latest/download/RattlegramPlusPlus.apk)** (always the newest version; older ones are on the [Releases page](https://github.com/doodlecomms/Rattlegram_Plus-Plus/releases)).
 2. Allow your browser or file manager to install unknown apps when Android asks.
 3. Install and open it, then allow the microphone (needed to receive) and, if you want GPS features, location.
 

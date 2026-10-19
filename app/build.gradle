@@ -52,6 +52,15 @@ android {
         }
     }
 
+    // Fixed APK name for releases, so the permanent link
+    // https://github.com/doodlecomms/Rattlegram_Plus-Plus/releases/latest/download/RattlegramPlusPlus.apk
+    // always finds the newest version
+    applicationVariants.configureEach { variant ->
+        variant.outputs.configureEach {
+            outputFileName = variant.buildType.name == 'release' ? 'RattlegramPlusPlus.apk' : "RattlegramPlusPlus-${variant.buildType.name}.apk"
+        }
+    }
+
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_1_8
         targetCompatibility JavaVersion.VERSION_1_8
