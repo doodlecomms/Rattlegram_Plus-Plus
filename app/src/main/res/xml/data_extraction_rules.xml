@@ -4,16 +4,11 @@
    for details.
 -->
 <data-extraction-rules>
+	<!-- The remembered password is encrypted with a key that never leaves this phone; never back it up -->
 	<cloud-backup>
-		<!-- TODO: Use <include> and <exclude> to control what is backed up.
-        <include .../>
-        <exclude .../>
-        -->
+		<exclude domain="sharedpref" path="password_store.xml"/>
 	</cloud-backup>
-	<!--
-    <device-transfer>
-        <include .../>
-        <exclude .../>
-    </device-transfer>
-    -->
+	<device-transfer>
+		<exclude domain="sharedpref" path="password_store.xml"/>
+	</device-transfer>
 </data-extraction-rules>

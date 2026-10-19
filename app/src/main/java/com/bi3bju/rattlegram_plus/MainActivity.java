@@ -933,6 +933,10 @@ public class MainActivity extends AppCompatActivity {
         status = binding.status;
         handler = new Handler(getMainLooper());
         radioLink = new RadioLink(radioListener);
+        // Optional remembered password (encrypted with an Android Keystore key)
+        String rememberedPassword = PasswordStore.load(this);
+        if (rememberedPassword != null)
+            password = rememberedPassword;
         setContentView(binding.getRoot());
         setTitle(R.string.app_title);
         handleInsets();
@@ -2580,6 +2584,8 @@ public class MainActivity extends AppCompatActivity {
         Button generateButton = view.findViewById(R.id.generate_password_button);
         Button cancelButton = view.findViewById(R.id.button_cancel);
         Button okButton = view.findViewById(R.id.button_okay);
+        CheckBox rememberCheck = view.findViewById(R.id.remember_password);
+        rememberCheck.setChecked(PasswordStore.isRemembered(this));
 
         editText.setText(password);
         editText.setSelection(password.length());
@@ -2645,6 +2651,7 @@ public class MainActivity extends AppCompatActivity {
 
             if (newPassword.isEmpty()) {
                 password = "";
+                PasswordStore.clear(this);
                 errorText.setVisibility(View.GONE);
                 Toast.makeText(this, R.string.password_updated, Toast.LENGTH_SHORT).show();
                 dialog.dismiss();
@@ -2659,7 +2666,14 @@ public class MainActivity extends AppCompatActivity {
             }
 
             password = newPassword;
-            Toast.makeText(this, R.string.password_updated, Toast.LENGTH_SHORT).show();
+            if (!rememberCheck.isChecked()) {
+                PasswordStore.clear(this);
+                Toast.makeText(this, R.string.password_updated, Toast.LENGTH_SHORT).show();
+            } else if (PasswordStore.save(this, newPassword)) {
+                Toast.makeText(this, R.string.password_remembered, Toast.LENGTH_SHORT).show();
+            } else {
+                Toast.makeText(this, R.string.password_remember_failed, Toast.LENGTH_LONG).show();
+            }
             dialog.dismiss();
         });
 

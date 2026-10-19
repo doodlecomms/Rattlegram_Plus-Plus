@@ -6,6 +6,8 @@
    See https://developer.android.com/about/versions/12/backup-restore
 -->
 <full-backup-content>
+	<!-- The remembered password is encrypted with a key that never leaves this phone; never back it up -->
+	<exclude domain="sharedpref" path="password_store.xml"/>
 	<!--
    <include domain="sharedpref" path="."/>
    <exclude domain="sharedpref" path="device.xml"/>
