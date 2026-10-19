@@ -984,9 +984,9 @@ public class MainActivity extends AppCompatActivity {
                         try {
                             double lat = Double.parseDouble(matcher.group(1));
                             double lng = Double.parseDouble(matcher.group(2));
-                            // Extract call sign and note from the first line as pin title
+                            // Use the sender's call sign from the first line as the pin title
                             String[] cn = parseCallAndNote(mesg[0]);
-                            openMap(lat, lng, cn[0], cn[1]);
+                            openMap(lat, lng, cn[0]);
                         } catch (NumberFormatException e) {
                             Toast.makeText(this, R.string.location_parse_failed, Toast.LENGTH_SHORT).show();
                         }
@@ -1254,26 +1254,17 @@ public class MainActivity extends AppCompatActivity {
      * Open map:
      * 1. First try the system default map app (geo: URI) with a pin title.
      * 2. If no map app is available, open OpenStreetMap in a browser.
-     * Pin title is "callSign[note]"; if the note is empty only the call sign is shown;
+     * Pin title is the sender's call sign (without any contact note);
      * if the call sign is empty it falls back to the default location label.
      */
-    private void openMap(double lat, double lng, String pinCall, String pinNote) {
+    private void openMap(double lat, double lng, String pinCall) {
         if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
             Toast.makeText(this, R.string.location_format_error, Toast.LENGTH_SHORT).show();
             return;
         }
 
-        // Pin title: callSign[note]
-        String label;
-        if (pinCall != null && !pinCall.isEmpty()) {
-            if (pinNote != null && !pinNote.isEmpty()) {
-                label = pinCall + "[" + pinNote + "]";
-            } else {
-                label = pinCall;
-            }
-        } else {
-            label = getString(R.string.location_default_label);
-        }
+        // Pin title: just the call sign
+        String label = pinCall != null && !pinCall.isEmpty() ? pinCall : getString(R.string.location_default_label);
         String encodedLabel = Uri.encode(label);
 
         // 1. Prefer opening the system default map app via geo: URI
@@ -1975,12 +1966,12 @@ public class MainActivity extends AppCompatActivity {
         view.findViewById(R.id.salute_button).setOnClickListener(
                 v -> showSaluteDialog(edit, encryptCheck.isChecked() && encryptCheck.isEnabled()));
 
-        // Location messages are not allowed to be encrypted (otherwise the receiver cannot recognize [geo:...])
-        boolean isLocationMsg = temp != null && temp.contains("[geo:");
+        // Location messages can be encrypted too: receivers decrypt before looking for 📍[geo:...],
+        // so stations with the password still get a tappable location and others see ciphertext.
         boolean hasPassword = password != null && !password.isEmpty();
-        encryptCheck.setEnabled(hasPassword && !isLocationMsg);
+        encryptCheck.setEnabled(hasPassword);
         // Restore the last choice; the stored choice is only changed by the user toggling the box
-        encryptCheck.setChecked(hasPassword && !isLocationMsg && encryptMessage);
+        encryptCheck.setChecked(hasPassword && encryptMessage);
 
         AlertDialog.Builder builder = new AlertDialog.Builder(this, R.style.Theme_AlertDialog);
         builder.setTitle(R.string.compose_message);
