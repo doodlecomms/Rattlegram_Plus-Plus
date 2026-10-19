@@ -9,6 +9,8 @@ package com.bi3bju.rattlegram_plus;
 import androidx.activity.EdgeToEdge;
 import androidx.annotation.NonNull;
 import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.PickVisualMediaRequest;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.app.AppCompatDelegate;
@@ -30,6 +32,8 @@ import android.content.pm.PackageManager;
 import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.graphics.Bitmap;
+import android.graphics.drawable.BitmapDrawable;
+import android.util.LruCache;
 import android.graphics.Color;
 import android.graphics.drawable.Drawable;
 import android.location.Location;
@@ -151,6 +155,37 @@ public class MainActivity extends AppCompatActivity {
         @Override
         protected boolean removeEldestEntry(java.util.Map.Entry<String, String> eldest) {
             return size() > 50;
+        }
+    };
+    // ---- Pictures
+    private static final String PICTURE_TOKEN = "📷[pic:";
+    /** Rough on-air time per picture part, including the pause before the next one. */
+    private static final float SECONDS_PER_PICTURE_PART = 3.5f;
+    /**
+     * Pause between picture parts. A radio needs time to drop out of transmit and the receiving radio's
+     * squelch time to close before the next key-up, or the start of the next part (its sync) gets clipped.
+     */
+    private static final long PICTURE_PART_GAP_RADIO_MS = 1500, PICTURE_PART_GAP_SPEAKER_MS = 500;
+    private long pictureLastBusy;
+    private boolean pictureEncrypt;
+    private List<String> pictureQueue;
+    private int pictureQueuePos;
+    private String pictureSendingEntry, pictureSendingName;
+    private final LruCache<String, Bitmap> pictureThumbs = new LruCache<>(40);
+
+    /** A picture being received from one sender. */
+    private static final class IncomingPicture {
+        PictureCodec.Assembly assembly;
+        String entry;
+        boolean done, locked, wantAck;
+        int lastIndex = -1;
+        Runnable ackTask;
+    }
+
+    private final java.util.LinkedHashMap<String, IncomingPicture> incomingPictures = new java.util.LinkedHashMap<String, IncomingPicture>() {
+        @Override
+        protected boolean removeEldestEntry(java.util.Map.Entry<String, IncomingPicture> eldest) {
+            return size() > 8;
         }
     };
     private static final java.util.regex.Pattern ACK_PATTERN = java.util.regex.Pattern.compile("^ACK ([0-9a-f]{4})$");
@@ -373,7 +408,10 @@ public class MainActivity extends AppCompatActivity {
                         repeatMessage();
                     } else {
                         String received = new String(payload).trim();
-                        if (!handleAcknowledgment(sender, received)) {
+                        PictureCodec.Packet picturePart = PictureCodec.parse(received);
+                        if (picturePart != null) {
+                            handlePicturePart(sender, picturePart, received);
+                        } else if (!handleAcknowledgment(sender, received)) {
                             autoSaveContact(sender);
                             addMessage(sender, getString(R.string.received), received);
                             maybeAcknowledge(received);
@@ -537,7 +575,21 @@ public class MainActivity extends AppCompatActivity {
             }
 
             String item = getItem(position);
-            textView.setText(item);
+            String pictureName = pictureNameIn(item);
+            if (pictureName != null) {
+                textView.setText(item.replace(PICTURE_TOKEN + pictureName + "]", getString(R.string.picture_label)));
+                Bitmap thumb = pictureThumbnail(pictureName);
+                if (thumb != null) {
+                    BitmapDrawable d = new BitmapDrawable(getResources(), thumb);
+                    d.setFilterBitmap(false);
+                    textView.setCompoundDrawablesWithIntrinsicBounds(null, null, null, d);
+                } else {
+                    textView.setCompoundDrawablesWithIntrinsicBounds(null, null, null, null);
+                }
+            } else {
+                textView.setText(item);
+                textView.setCompoundDrawablesWithIntrinsicBounds(null, null, null, null);
+            }
 
             // Lazily record the default text color
             if (bubbleDefaultTextColor == -1) {
@@ -599,6 +651,9 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void startListening() {
+        // Between the parts of a picture being sent the phone stays in transmit mode
+        if (pictureQueue != null)
+            return;
         if (isRadioConnected()) {
             setStatus(getString(R.string.radio_listening, radioLink.getDeviceName()));
             return;
@@ -967,6 +1022,7 @@ public class MainActivity extends AppCompatActivity {
         payload = new byte[170];
         repeatedMessages = new ArrayList<>();
         loadContacts();
+        prunePictures();
         messageListView = binding.messages;
         binding.messages.setAdapter(messages);
 
@@ -977,6 +1033,8 @@ public class MainActivity extends AppCompatActivity {
                 String[] mesg = item.split("\n", 2);
                 if (mesg.length == 2) {
                     String content = mesg[1];
+                    if (handlePictureTap(item, content))
+                        return;
                     // Match 📍[geo:latitude,longitude]
                     Pattern pattern = Pattern.compile(LOCATION_PATTERN);
                     Matcher matcher = pattern.matcher(content);
@@ -1889,6 +1947,8 @@ public class MainActivity extends AppCompatActivity {
 
     private void clearStoredMessages() {
         messages.clear();
+        PictureUtil.prune(this, new java.util.HashSet<>());
+        incomingPictures.clear();
         SharedPreferences pref = getPreferences(Context.MODE_PRIVATE);
         SharedPreferences.Editor editor = pref.edit();
         for (int i = 0; i < 100; ++i)
@@ -1994,6 +2054,13 @@ public class MainActivity extends AppCompatActivity {
 
         AlertDialog dialog = builder.show();
         Context context = this;
+        view.findViewById(R.id.picture_button).setOnClickListener(v -> {
+            if (temp == null)
+                draftText = edit.getText().toString();
+            pictureEncrypt = encryptCheck.isChecked() && encryptCheck.isEnabled();
+            dialog.dismiss();
+            choosePictureSource();
+        });
 
         final TextWatcher textWatcher = new TextWatcher() {
             @Override
@@ -2389,6 +2456,396 @@ public class MainActivity extends AppCompatActivity {
     }
 
 
+
+    // ========== Pictures ==========
+
+    private final ActivityResultLauncher<PickVisualMediaRequest> pickPicture =
+            registerForActivityResult(new ActivityResultContracts.PickVisualMedia(), uri -> {
+                if (uri == null)
+                    return;
+                try {
+                    showPicturePreview(PictureUtil.loadUri(this, uri, 640));
+                } catch (Exception e) {
+                    Toast.makeText(this, R.string.picture_load_failed, Toast.LENGTH_SHORT).show();
+                }
+            });
+
+    private final ActivityResultLauncher<Void> takePicture =
+            registerForActivityResult(new ActivityResultContracts.TakePicturePreview(), bitmap -> {
+                if (bitmap != null)
+                    showPicturePreview(bitmap);
+            });
+
+    private final ActivityResultLauncher<String> cameraPermission =
+            registerForActivityResult(new ActivityResultContracts.RequestPermission(), granted -> {
+                if (granted)
+                    takePicture.launch(null);
+                else
+                    Toast.makeText(this, R.string.picture_camera_denied, Toast.LENGTH_SHORT).show();
+            });
+
+    private void choosePictureSource() {
+        String[] choices = {getString(R.string.picture_take), getString(R.string.picture_choose)};
+        new AlertDialog.Builder(this, R.style.Theme_AlertDialog)
+                .setTitle(R.string.picture_send_title)
+                .setItems(choices, (dialog, which) -> {
+                    if (which == 0) {
+                        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED)
+                            takePicture.launch(null);
+                        else
+                            cameraPermission.launch(Manifest.permission.CAMERA);
+                    } else {
+                        pickPicture.launch(new PickVisualMediaRequest.Builder()
+                                .setMediaType(ActivityResultContracts.PickVisualMedia.ImageOnly.INSTANCE)
+                                .build());
+                    }
+                })
+                .setNegativeButton(R.string.cancel, null)
+                .show();
+    }
+
+    /** Lets the user pick size, robustness and encryption, showing exactly what will be sent. */
+    private void showPicturePreview(Bitmap source) {
+        View view = getLayoutInflater().inflate(R.layout.picture_preview, null);
+        ImageView preview = view.findViewById(R.id.picture_preview);
+        TextView info = view.findViewById(R.id.picture_info);
+        RadioGroup sizeGroup = view.findViewById(R.id.picture_size);
+        CheckBox robustCheck = view.findViewById(R.id.picture_robust);
+        CheckBox encryptCheck = view.findViewById(R.id.picture_encrypt);
+        SharedPreferences pref = getPreferences(Context.MODE_PRIVATE);
+        int[] sizeIds = {R.id.picture_size_small, R.id.picture_size_medium, R.id.picture_size_large};
+        sizeGroup.check(sizeIds[Math.max(0, Math.min(2, pref.getInt("pictureSize", 0)))]);
+        robustCheck.setChecked(pref.getBoolean("pictureRobust", false));
+        boolean hasPassword = password != null && !password.isEmpty();
+        encryptCheck.setEnabled(hasPassword);
+        encryptCheck.setChecked(hasPassword && pictureEncrypt);
+        if (!hasPassword)
+            encryptCheck.setText(R.string.picture_encrypt_no_password);
+
+        final byte[][] current = {null};
+        final int[] sizeIndex = {0};
+        AlertDialog dialog = new AlertDialog.Builder(this, R.style.Theme_AlertDialog)
+                .setTitle(R.string.picture_send_title)
+                .setView(view)
+                .setPositiveButton(R.string.transmit, (d, which) -> {
+                    pref.edit().putInt("pictureSize", sizeIndex[0]).putBoolean("pictureRobust", robustCheck.isChecked()).apply();
+                    sendPicture(current[0], encryptCheck.isChecked() && encryptCheck.isEnabled(), robustCheck.isChecked());
+                })
+                .setNegativeButton(R.string.cancel, null)
+                .show();
+
+        Runnable update = () -> {
+            int checked = sizeGroup.getCheckedRadioButtonId();
+            sizeIndex[0] = checked == R.id.picture_size_large ? 2 : checked == R.id.picture_size_medium ? 1 : 0;
+            byte[] bytes = PictureUtil.compress(source, PictureUtil.MAX_SIDE[sizeIndex[0]], PictureUtil.QUALITY[sizeIndex[0]]);
+            current[0] = bytes;
+            preview.setImageBitmap(PictureUtil.decode(bytes));
+            boolean encrypt = encryptCheck.isChecked() && encryptCheck.isEnabled();
+            int chars = robustCheck.isChecked() ? PictureCodec.ROBUST_PACKET_CHARS : PictureCodec.FAST_PACKET_CHARS;
+            int parts = PictureCodec.packetCount(bytes.length, encrypt, chars);
+            int dataParts = PictureCodec.dataPartCount(bytes.length, encrypt, chars);
+            if (parts > PictureCodec.MAX_PARTS) {
+                info.setText(R.string.picture_too_large);
+                info.setTextColor(Color.RED);
+                dialog.getButton(AlertDialog.BUTTON_POSITIVE).setEnabled(false);
+            } else {
+                int seconds = Math.round(parts * SECONDS_PER_PICTURE_PART);
+                info.setText(getString(R.string.picture_info, bytes.length / 1024f, dataParts, parts - dataParts, seconds / 60, seconds % 60));
+                info.setTextColor(ContextCompat.getColor(this, R.color.tint));
+                dialog.getButton(AlertDialog.BUTTON_POSITIVE).setEnabled(true);
+            }
+        };
+        sizeGroup.setOnCheckedChangeListener((group, id) -> update.run());
+        robustCheck.setOnCheckedChangeListener((b, c) -> update.run());
+        encryptCheck.setOnCheckedChangeListener((b, c) -> update.run());
+        update.run();
+    }
+
+    private void sendPicture(byte[] image, boolean encrypt, boolean robust) {
+        if (image == null)
+            return;
+        if (pictureQueue != null || isTransmitBusy()) {
+            Toast.makeText(this, R.string.picture_busy, Toast.LENGTH_SHORT).show();
+            return;
+        }
+        List<String> packets;
+        try {
+            int id = new java.security.SecureRandom().nextInt(0x10000);
+            packets = PictureCodec.buildPackets(image, encrypt ? password : null,
+                    robust ? PictureCodec.ROBUST_PACKET_CHARS : PictureCodec.FAST_PACKET_CHARS, id);
+        } catch (Exception e) {
+            Toast.makeText(this, R.string.picture_too_large, Toast.LENGTH_SHORT).show();
+            return;
+        }
+        String name = "s" + Long.toString(System.currentTimeMillis(), 36);
+        try {
+            PictureUtil.save(this, name + ".webp", image);
+            PictureUtil.saveText(this, name + ".pkt", android.text.TextUtils.join("\n", packets));
+        } catch (Exception e) {
+            Toast.makeText(this, R.string.picture_load_failed, Toast.LENGTH_SHORT).show();
+            return;
+        }
+        String entry = addMessage(callSign.trim(), getString(R.string.transmitted),
+                pictureBody(name, encrypt, getString(R.string.picture_sending, 0, packets.size())));
+        startPictureQueue(packets, entry, name);
+    }
+
+    private void startPictureQueue(List<String> packets, String entry, String name) {
+        pictureQueue = packets;
+        pictureQueuePos = 0;
+        pictureSendingEntry = entry;
+        pictureSendingName = name;
+        handler.post(pictureSender);
+    }
+
+    /** Sends the queued picture parts one after another, waiting for each to finish. */
+    private final Runnable pictureSender = new Runnable() {
+        @Override
+        public void run() {
+            List<String> queue = pictureQueue;
+            if (queue == null)
+                return;
+            if (isTransmitBusy()) {
+                pictureLastBusy = System.currentTimeMillis();
+                handler.postDelayed(this, 100);
+                return;
+            }
+            long gap = isRadioConnected() ? PICTURE_PART_GAP_RADIO_MS : PICTURE_PART_GAP_SPEAKER_MS;
+            long wait = pictureLastBusy + gap - System.currentTimeMillis();
+            if (pictureQueuePos > 0 && wait > 0) {
+                handler.postDelayed(this, wait);
+                return;
+            }
+            boolean encrypted = PictureCodec.isEncrypted(queue.get(0));
+            if (pictureQueuePos >= queue.size()) {
+                String entry = replaceBody(pictureSendingEntry,
+                        pictureBody(pictureSendingName, encrypted, getString(R.string.picture_sent, queue.size())));
+                // A station acknowledging the whole picture uses the picture's ID
+                PictureCodec.Packet first = PictureCodec.parse(queue.get(0));
+                if (first != null)
+                    sentMessagesById.put(acknowledgmentId(pictureAckSource(first.id)), entry);
+                pictureQueue = null;
+                startListening();
+                return;
+            }
+            sendOnAir(queue.get(pictureQueuePos++));
+            pictureLastBusy = System.currentTimeMillis();
+            pictureSendingEntry = replaceBody(pictureSendingEntry,
+                    pictureBody(pictureSendingName, encrypted, getString(R.string.picture_sending, pictureQueuePos, queue.size())));
+            handler.postDelayed(this, 1000);
+        }
+    };
+
+    private void handlePicturePart(String sender, PictureCodec.Packet part, String text) {
+        String key = sender + "/" + part.id;
+        IncomingPicture in = incomingPictures.get(key);
+        if (in != null && in.done && in.assembly.matches(part)) {
+            // Spare parts still arriving after the picture is complete: the sender is still transmitting
+            in.lastIndex = Math.max(in.lastIndex, part.index);
+            scheduleCompleteAck(in);
+            return;
+        }
+        if (in == null || !in.assembly.matches(part)) {
+            in = new IncomingPicture();
+            in.assembly = new PictureCodec.Assembly(part);
+            autoSaveContact(sender);
+            in.entry = addMessage(sender, getString(R.string.received),
+                    getString(R.string.picture_receiving, 0, part.dataParts));
+            incomingPictures.put(key, in);
+        }
+        in.lastIndex = Math.max(in.lastIndex, part.index);
+        if (!in.assembly.add(part))
+            return;
+        if (!in.assembly.complete()) {
+            in.entry = replaceBody(in.entry, getString(R.string.picture_receiving, in.assembly.received(), in.assembly.dataParts));
+            return;
+        }
+        finishIncomingPicture(in);
+    }
+
+    private void finishIncomingPicture(IncomingPicture in) {
+        byte[] image = in.assembly.assemble(password);
+        if (image == null || PictureUtil.decode(image) == null) {
+            if (in.assembly.encrypted) {
+                in.locked = true;
+                in.entry = replaceBody(in.entry, getString(R.string.picture_locked));
+            } else {
+                in.done = true;
+                in.entry = replaceBody(in.entry, getString(R.string.picture_corrupt));
+            }
+            return;
+        }
+        String name = "r" + Long.toString(System.currentTimeMillis(), 36);
+        try {
+            PictureUtil.save(this, name + ".webp", image);
+        } catch (Exception e) {
+            return;
+        }
+        in.done = true;
+        in.locked = false;
+        in.entry = replaceBody(in.entry, pictureBody(name, in.assembly.encrypted, null));
+        // Pictures are never addressed to a call sign, so only "All messages" acknowledges them
+        if (ackMode == ACK_ALL && hasRealCallSign()) {
+            in.wantAck = true;
+            scheduleCompleteAck(in);
+        }
+    }
+
+    /** The text both sides derive a picture's acknowledgment ID from: "~P" plus its 4-digit ID. */
+    private static String pictureAckSource(int id) {
+        return String.format(Locale.US, "%s%04x", PictureCodec.PREFIX, id & 0xffff);
+    }
+
+    /**
+     * Acknowledges a complete picture once the sender should have finished transmitting its remaining
+     * (spare) parts, so the ACK is not sent while the sender cannot listen. Later parts push it back.
+     */
+    private void scheduleCompleteAck(IncomingPicture in) {
+        if (!in.wantAck)
+            return;
+        if (in.ackTask != null)
+            handler.removeCallbacks(in.ackTask);
+        int remaining = Math.max(0, in.assembly.total - 1 - in.lastIndex);
+        long delay = (long) (remaining * SECONDS_PER_PICTURE_PART * 1000) + 1500 + new java.util.Random().nextInt(4500);
+        String reply = "ACK " + acknowledgmentId(pictureAckSource(in.assembly.id));
+        in.ackTask = () -> {
+            in.wantAck = false;
+            in.ackTask = null;
+            sendAcknowledgment(reply, 3);
+        };
+        handler.postDelayed(in.ackTask, delay);
+    }
+
+    private static String pictureBody(String name, boolean encrypted, String status) {
+        StringBuilder sb = new StringBuilder(PICTURE_TOKEN).append(name).append(']');
+        if (encrypted)
+            sb.append(" 🔒");
+        if (status != null)
+            sb.append('\n').append(status);
+        return sb.toString();
+    }
+
+    /** The stored picture name inside a list entry, or null. */
+    private static String pictureNameIn(String item) {
+        if (item == null)
+            return null;
+        int start = item.indexOf(PICTURE_TOKEN);
+        if (start < 0)
+            return null;
+        int end = item.indexOf(']', start);
+        return end < 0 ? null : item.substring(start + PICTURE_TOKEN.length(), end);
+    }
+
+    /** Replaces the message text below the title line of a list entry; returns the new entry. */
+    private String replaceBody(String entry, String body) {
+        int nl = entry.indexOf('\n');
+        String updated = (nl < 0 ? entry : entry.substring(0, nl)) + "\n" + body;
+        int position = messages.getPosition(entry);
+        if (position >= 0) {
+            messages.remove(entry);
+            messages.insert(updated, position);
+            storeSettings();
+        }
+        return updated;
+    }
+
+    private Bitmap pictureThumbnail(String name) {
+        Bitmap cached = pictureThumbs.get(name);
+        if (cached != null)
+            return cached;
+        Bitmap bitmap = PictureUtil.load(this, name + ".webp");
+        if (bitmap == null)
+            return null;
+        int width = Math.round(200 * getResources().getDisplayMetrics().density);
+        int height = Math.max(1, width * bitmap.getHeight() / bitmap.getWidth());
+        Bitmap thumb = Bitmap.createScaledBitmap(bitmap, width, height, true);
+        pictureThumbs.put(name, thumb);
+        return thumb;
+    }
+
+    private void prunePictures() {
+        java.util.Set<String> keep = new java.util.HashSet<>();
+        for (int i = 0; i < messages.getCount(); ++i) {
+            String name = pictureNameIn(messages.getItem(i));
+            if (name != null)
+                keep.add(name);
+        }
+        PictureUtil.prune(this, keep);
+    }
+
+    /** Handles a tap on a picture-related list entry; returns false for other entries. */
+    private boolean handlePictureTap(String item, String content) {
+        String name = pictureNameIn(item);
+        if (pictureQueue != null && item.equals(pictureSendingEntry)) {
+            new AlertDialog.Builder(this, R.style.Theme_AlertDialog)
+                    .setMessage(R.string.picture_stop_prompt)
+                    .setPositiveButton(R.string.picture_stop, (d, w) -> {
+                        String sending = pictureSendingEntry;
+                        List<String> queue = pictureQueue;
+                        pictureQueue = null;
+                        if (sending != null && queue != null)
+                            replaceBody(sending, pictureBody(pictureSendingName, PictureCodec.isEncrypted(queue.get(0)),
+                                    getString(R.string.picture_stopped, pictureQueuePos, queue.size())));
+                        startListening();
+                    })
+                    .setNegativeButton(R.string.cancel, null)
+                    .show();
+            return true;
+        }
+        if (name != null) {
+            showPictureViewer(item, name);
+            return true;
+        }
+        for (IncomingPicture in : incomingPictures.values()) {
+            if (!item.equals(in.entry))
+                continue;
+            if (in.locked) {
+                finishIncomingPicture(in);
+                if (in.locked)
+                    Toast.makeText(this, R.string.picture_still_locked, Toast.LENGTH_LONG).show();
+            } else if (!in.done) {
+                Toast.makeText(this, getString(R.string.picture_missing, in.assembly.needed()), Toast.LENGTH_LONG).show();
+            }
+            return true;
+        }
+        if (content.startsWith("📷") || content.startsWith("🔒")) {
+            Toast.makeText(this, R.string.picture_incomplete_old, Toast.LENGTH_SHORT).show();
+            return true;
+        }
+        return false;
+    }
+
+    private void showPictureViewer(String item, String name) {
+        Bitmap bitmap = PictureUtil.load(this, name + ".webp");
+        if (bitmap == null) {
+            Toast.makeText(this, R.string.picture_missing_file, Toast.LENGTH_SHORT).show();
+            return;
+        }
+        ImageView image = new ImageView(this);
+        image.setAdjustViewBounds(true);
+        image.setScaleType(ImageView.ScaleType.FIT_CENTER);
+        int width = getResources().getDisplayMetrics().widthPixels;
+        image.setImageBitmap(Bitmap.createScaledBitmap(bitmap, width, Math.max(1, width * bitmap.getHeight() / bitmap.getWidth()), true));
+        boolean sent = item.contains(getString(R.string.transmitted));
+        AlertDialog.Builder builder = new AlertDialog.Builder(this, R.style.Theme_AlertDialog)
+                .setView(image)
+                .setNegativeButton(R.string.close, null);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q)
+            builder.setPositiveButton(R.string.picture_save, (d, w) -> Toast.makeText(this,
+                    PictureUtil.saveToGallery(this, name + ".webp") ? R.string.picture_saved : R.string.picture_save_failed,
+                    Toast.LENGTH_SHORT).show());
+        String packets = sent ? PictureUtil.readText(this, name + ".pkt") : null;
+        if (packets != null)
+            builder.setNeutralButton(R.string.picture_send_again, (d, w) -> {
+                if (pictureQueue != null || isTransmitBusy()) {
+                    Toast.makeText(this, R.string.picture_busy, Toast.LENGTH_SHORT).show();
+                    return;
+                }
+                startPictureQueue(Arrays.asList(packets.split("\n")), item, name);
+            });
+        builder.show();
+    }
+
     // ========== Acknowledgments ==========
 
     /** Short message ID shared by sender and receiver: the low 16 bits of the CRC-32 of the sent text. */
@@ -2430,7 +2887,12 @@ public class MainActivity extends AppCompatActivity {
             if (!text.startsWith("@" + callSign.trim() + " "))
                 return;
         }
-        String reply = "ACK " + acknowledgmentId(received);
+        scheduleAcknowledgment(received);
+    }
+
+    /** Sends "ACK <id of idText>" after a short random pause. */
+    private void scheduleAcknowledgment(String idText) {
+        String reply = "ACK " + acknowledgmentId(idText);
         // Give the sender time to switch back to receive; spread replies more when everyone may answer
         int maxDelay = ackMode == ACK_ALL ? 6000 : 3500;
         long delay = 1500 + new java.util.Random().nextInt(maxDelay - 1500);
@@ -2438,9 +2900,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void sendAcknowledgment(String reply, int attemptsLeft) {
-        boolean busy = isRadioConnected() ? radioLink.isTransmitting()
-                : audioTrack != null && audioTrack.getPlayState() == AudioTrack.PLAYSTATE_PLAYING;
-        if (busy) {
+        if (isTransmitBusy() || pictureQueue != null) {
             if (attemptsLeft > 1)
                 handler.postDelayed(() -> sendAcknowledgment(reply, attemptsLeft - 1), 1500);
             return;
@@ -2521,9 +2981,6 @@ public class MainActivity extends AppCompatActivity {
             }
         }
 
-        stopListening();
-        byte[] mesg = Arrays.copyOf(finalMessage.getBytes(StandardCharsets.UTF_8), payload.length);
-
         if (isAcknowledgment) {
             addLine(callSign.trim(), getString(R.string.ack_sent));
         } else if (message.length() == 0) {
@@ -2535,17 +2992,7 @@ public class MainActivity extends AppCompatActivity {
             sentMessagesById.put(acknowledgmentId(finalMessage.trim()), entry);
         }
 
-        configureEncoder(mesg, callTerm(), carrierFrequency, noiseSymbols, fancyHeader);
-        if (isRadioConnected()) {
-            transmitViaRadio(0);
-        } else {
-            for (int i = 0; i < 5; ++i) {
-                produceEncoder(outputBuffer, outputChannel);
-                audioTrack.write(outputBuffer, 0, outputBuffer.length);
-            }
-            audioTrack.play();
-            setStatus(getString(R.string.transmitting));
-        }
+        sendOnAir(finalMessage);
 
         if (wasBeaconRunning) {
             beaconRunnable = new Runnable() {
@@ -2559,6 +3006,28 @@ public class MainActivity extends AppCompatActivity {
             };
             beaconHandler.postDelayed(beaconRunnable, BEACON_INTERVAL);
         }
+    }
+
+    /** Transmits text as one Rattlegram message (speaker or Bluetooth radio), without touching the message list. */
+    private void sendOnAir(String text) {
+        stopListening();
+        byte[] mesg = Arrays.copyOf(text.getBytes(StandardCharsets.UTF_8), payload.length);
+        configureEncoder(mesg, callTerm(), carrierFrequency, noiseSymbols, fancyHeader);
+        if (isRadioConnected()) {
+            transmitViaRadio(0);
+        } else {
+            for (int i = 0; i < 5; ++i) {
+                produceEncoder(outputBuffer, outputChannel);
+                audioTrack.write(outputBuffer, 0, outputBuffer.length);
+            }
+            audioTrack.play();
+            setStatus(getString(R.string.transmitting));
+        }
+    }
+
+    private boolean isTransmitBusy() {
+        return isRadioConnected() ? radioLink.isTransmitting()
+                : audioTrack != null && audioTrack.getPlayState() == AudioTrack.PLAYSTATE_PLAYING;
     }
 
     private void repeatMessage() {
