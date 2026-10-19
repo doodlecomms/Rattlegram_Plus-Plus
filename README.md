@@ -18,6 +18,10 @@ Rattlegram Plus Plus is an independent fork of [Rattlegram Plus](https://github.
 
 ## What's new in Plus Plus
 
+- 🖼️ **Pictures** *(new in 1.1)* — Compose → Picture: take a photo or pick one, choose Small/Medium/Large, optionally Robust and Encrypt. It goes out as a series of ordinary Rattlegram messages with spare parts, so a few lost parts are rebuilt automatically. Photo metadata (GPS location, time, camera) is removed; only the pixels are sent.
+- ✅ **Acknowledgments** *(new in 1.1)* — Menu → Acknowledgments: Off, Messages addressed to me (`@CALL ...`), or All messages. The sender's message gets "✓ Acknowledged by …". Your radio transmits the short ACK on its own, so it is off by default.
+- 🔐 **Remember password** *(new in 1.1)* — optional; stored encrypted with a key that never leaves the phone and excluded from backups.
+- 📍 **Encrypted location sharing** *(new in 1.1)* — the Encrypt box now works for locations too; the map pin is labelled with the sender's call sign.
 - 📻 **Bluetooth radio audio** — Menu → Bluetooth Radio connects to a paired **BTech UV-Pro** (and, by the same protocol, **Vero VR-N76**). Receive and transmit go over Bluetooth; the radio keys while it receives audio and is always unkeyed afterwards. No cable or DigiRig.
 - 🔇 **Automatic radio speaker mute** — while connected, the radio's speaker is muted and its volume restored on disconnect (also after an unexpected drop).
 - 🪖 **SALUTE report** — a form for Size, Activity, Location, Unit, Time, Equipment. Location from GPS as Lat/Long, Maidenhead or MGRS (or typed); time in UTC or local; a live byte counter so the report fits, including in encrypted messages.
@@ -53,6 +57,14 @@ Requires Android 7.0 or newer.
 4. Send and receive as usual. While connected the microphone is off and the audio rate/channel settings are locked.
 
 Tested with a UV-Pro (firmware 0.9.3) and Samsung Galaxy A15 phones. The Vero VR-N76 uses the same protocol but has not been tested yet — reports welcome.
+
+## Sending pictures
+
+Compose → **Picture**, then take a photo or choose one. The preview shows the size, the number of parts (plus spare parts) and about how long it will take. Tips:
+- **Small** is usually enough; a detailed photo is around 2–5 KB and takes 1–3 minutes.
+- Tick **Robust** on weak links. It is slower but needs a few dB less signal.
+- The receiver needs Rattlegram Plus Plus 1.1 or newer; other Rattlegram apps show the parts as text.
+- If parts are lost beyond the spares, the receiving bubble says how many are still needed; the sender can tap the picture and choose **Send again**.
 
 ## Sharing the encryption password
 
