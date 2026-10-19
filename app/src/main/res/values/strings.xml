@@ -190,6 +190,17 @@ The resulting text message from the COFDMTV decoder is the only data that gets s
 	<string name="remember_password">Remember password on this phone</string>
 	<string name="password_remembered">Password updated and remembered on this phone</string>
 	<string name="password_remember_failed">Password updated, but it could not be saved securely on this phone. You will need to enter it again next time.</string>
+	<!-- Acknowledgments -->
+	<string name="acknowledgments">Acknowledgments</string>
+	<string name="ack_off">Off</string>
+	<string name="ack_addressed">Messages addressed to me</string>
+	<string name="ack_all">All messages</string>
+	<string name="ack_enable_addressed_prompt">When a message starting with @your call sign arrives, this phone will automatically transmit a short acknowledgment (\"ACK\" plus a 4-character message ID) a few seconds later. Your radio will transmit on its own. Enable?</string>
+	<string name="ack_enable_all_prompt">This phone will automatically transmit a short acknowledgment for EVERY message it receives. Your radio will transmit on its own, and if several stations do this they may answer at the same time. Enable?</string>
+	<string name="ack_needs_call_sign">Set your call sign first. Acknowledgments are transmitted under your call sign.</string>
+	<string name="ack_sent">Sent acknowledgment</string>
+	<string name="ack_received">✓ Acknowledged by %1$s at %2$s</string>
+	<string name="ack_other">Acknowledged a message (not one of ours)</string>
 	<!-- Password QR code -->
 	<string name="password_show_qr">Show QR</string>
 	<string name="password_scan_qr">Scan QR</string>

@@ -143,6 +143,17 @@ public class MainActivity extends AppCompatActivity {
     private boolean repeaterMode;
     private boolean encryptMessage;
     private boolean deleteMessagesOnClose;
+    // Automatic acknowledgments: ACK_OFF, ACK_ADDRESSED (messages starting with @MYCALL) or ACK_ALL
+    private int ackMode;
+    private static final int ACK_OFF = 0, ACK_ADDRESSED = 1, ACK_ALL = 2;
+    // ID -> list entry of recently sent messages, so an incoming ACK can mark the right bubble
+    private final java.util.LinkedHashMap<String, String> sentMessagesById = new java.util.LinkedHashMap<String, String>() {
+        @Override
+        protected boolean removeEldestEntry(java.util.Map.Entry<String, String> eldest) {
+            return size() > 50;
+        }
+    };
+    private static final java.util.regex.Pattern ACK_PATTERN = java.util.regex.Pattern.compile("^ACK ([0-9a-f]{4})$");
     private boolean showSpectrum;
     private boolean ultrasonicEnabled;
     private int spectrumTint;
@@ -361,8 +372,12 @@ public class MainActivity extends AppCompatActivity {
                     if (repeaterMode) {
                         repeatMessage();
                     } else {
-                        autoSaveContact(sender);
-                        addMessage(sender, getString(R.string.received), new String(payload).trim());
+                        String received = new String(payload).trim();
+                        if (!handleAcknowledgment(sender, received)) {
+                            autoSaveContact(sender);
+                            addMessage(sender, getString(R.string.received), received);
+                            maybeAcknowledge(received);
+                        }
                     }
                 }
                 break;
@@ -462,14 +477,16 @@ public class MainActivity extends AppCompatActivity {
     }
 
     // Decrypt when receiving a message
-    private void addMessage(String call, String info, String mesg) {
+    private String addMessage(String call, String info, String mesg) {
         if (info.equals(getString(R.string.received))) {
             String decrypted = CryptoUtils.decrypt(mesg, password);
             if (decrypted != null) {
                 mesg = decrypted;
             }
         }
-        addString(getString(R.string.title_message, currentTime(), appendContactNote(call), info, mesg));
+        String entry = getString(R.string.title_message, currentTime(), appendContactNote(call), info, mesg);
+        addString(entry);
+        return entry;
     }
 
     private void addString(String str) {
@@ -732,6 +749,7 @@ public class MainActivity extends AppCompatActivity {
         state.putBoolean("repeaterMode", repeaterMode);
         state.putBoolean("encryptMessage", encryptMessage);
         state.putBoolean("deleteMessagesOnClose", deleteMessagesOnClose);
+        state.putInt("ackMode", ackMode);
         for (int i = 0; i < messages.getCount(); ++i)
             state.putString("m" + i, messages.getItem(i));
         super.onSaveInstanceState(state);
@@ -756,6 +774,7 @@ public class MainActivity extends AppCompatActivity {
         edit.putBoolean("repeaterMode", repeaterMode);
         edit.putBoolean("encryptMessage", encryptMessage);
         edit.putBoolean("deleteMessagesOnClose", deleteMessagesOnClose);
+        edit.putInt("ackMode", ackMode);
         for (int i = 0; i < messages.getCount(); ++i)
             edit.putString("m" + i, messages.getItem(i));
         edit.apply();
@@ -894,6 +913,7 @@ public class MainActivity extends AppCompatActivity {
             repeaterMode = pref.getBoolean("repeaterMode", defaultRepeaterMode);
             encryptMessage = pref.getBoolean("encryptMessage", defaultEncryptMessage);
             deleteMessagesOnClose = pref.getBoolean("deleteMessagesOnClose", defaultDeleteMessagesOnClose);
+            ackMode = pref.getInt("ackMode", ACK_OFF);
             // A fresh start means the app was closed since it was last used. Closing by swiping the
             // app away gives no reliable chance to clean up, so finish the job here.
             if (deleteMessagesOnClose)
@@ -920,6 +940,7 @@ public class MainActivity extends AppCompatActivity {
             repeaterMode = state.getBoolean("repeaterMode", defaultRepeaterMode);
             encryptMessage = state.getBoolean("encryptMessage", defaultEncryptMessage);
             deleteMessagesOnClose = state.getBoolean("deleteMessagesOnClose", defaultDeleteMessagesOnClose);
+            ackMode = state.getInt("ackMode", ACK_OFF);
             for (int i = 0; i < 100; ++i) {
                 String mesg = state.getString("m" + i, null);
                 if (mesg != null)
@@ -1543,6 +1564,7 @@ public class MainActivity extends AppCompatActivity {
         updateRepeaterModeMenu();
         updateDeleteMessagesOnCloseMenu();
         menu.findItem(R.id.action_radio_mute_speaker).setChecked(isRadioMuteEnabled());
+        updateAckMenu();
         return true;
     }
 
@@ -1608,6 +1630,18 @@ public class MainActivity extends AppCompatActivity {
             return true;
         }
 
+        if (id == R.id.action_ack_off) {
+            setAckMode(ACK_OFF);
+            return true;
+        }
+        if (id == R.id.action_ack_addressed) {
+            setAckMode(ACK_ADDRESSED);
+            return true;
+        }
+        if (id == R.id.action_ack_all) {
+            setAckMode(ACK_ALL);
+            return true;
+        }
         if (id == R.id.action_bluetooth_radio) {
             showRadioDialog();
             return true;
@@ -2363,7 +2397,109 @@ public class MainActivity extends AppCompatActivity {
                 .show();
     }
 
+
+    // ========== Acknowledgments ==========
+
+    /** Short message ID shared by sender and receiver: the low 16 bits of the CRC-32 of the sent text. */
+    private static String acknowledgmentId(String transmittedText) {
+        java.util.zip.CRC32 crc = new java.util.zip.CRC32();
+        crc.update(transmittedText.getBytes(StandardCharsets.UTF_8));
+        return String.format(Locale.US, "%04x", crc.getValue() & 0xffff);
+    }
+
+    /** If text is an "ACK xxxx" reply, marks the matching sent message and returns true. */
+    private boolean handleAcknowledgment(String sender, String text) {
+        java.util.regex.Matcher m = ACK_PATTERN.matcher(text);
+        if (!m.matches())
+            return false;
+        String entry = sentMessagesById.get(m.group(1));
+        int position = entry == null ? -1 : messages.getPosition(entry);
+        if (position < 0) {
+            addLine(sender, getString(R.string.ack_other));
+            return true;
+        }
+        String time = new SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(new Date());
+        String updated = entry + "\n" + getString(R.string.ack_received, sender, time);
+        messages.remove(entry);
+        messages.insert(updated, position);
+        sentMessagesById.put(m.group(1), updated);
+        storeSettings();
+        return true;
+    }
+
+    /** Sends an "ACK xxxx" reply after a short random pause, if the acknowledgment setting asks for it. */
+    private void maybeAcknowledge(String received) {
+        if (ackMode == ACK_OFF || received.isEmpty() || !hasRealCallSign())
+            return;
+        if (ackMode == ACK_ADDRESSED) {
+            String text = received;
+            String decrypted = CryptoUtils.decrypt(received, password);
+            if (decrypted != null)
+                text = decrypted;
+            if (!text.startsWith("@" + callSign.trim() + " "))
+                return;
+        }
+        String reply = "ACK " + acknowledgmentId(received);
+        // Give the sender time to switch back to receive; spread replies more when everyone may answer
+        int maxDelay = ackMode == ACK_ALL ? 6000 : 3500;
+        long delay = 1500 + new java.util.Random().nextInt(maxDelay - 1500);
+        handler.postDelayed(() -> sendAcknowledgment(reply, 3), delay);
+    }
+
+    private void sendAcknowledgment(String reply, int attemptsLeft) {
+        boolean busy = isRadioConnected() ? radioLink.isTransmitting()
+                : audioTrack != null && audioTrack.getPlayState() == AudioTrack.PLAYSTATE_PLAYING;
+        if (busy) {
+            if (attemptsLeft > 1)
+                handler.postDelayed(() -> sendAcknowledgment(reply, attemptsLeft - 1), 1500);
+            return;
+        }
+        transmitMessage(reply, false, true);
+    }
+
+    private boolean hasRealCallSign() {
+        String call = callSign == null ? "" : callSign.trim();
+        return !call.isEmpty() && !call.equals("ANONYMOUS");
+    }
+
+    private void setAckMode(int mode) {
+        if (mode == ackMode) {
+            updateAckMenu();
+            return;
+        }
+        if (mode == ACK_OFF) {
+            ackMode = ACK_OFF;
+            updateAckMenu();
+            return;
+        }
+        if (!hasRealCallSign()) {
+            Toast.makeText(this, R.string.ack_needs_call_sign, Toast.LENGTH_LONG).show();
+            updateAckMenu();
+            return;
+        }
+        new AlertDialog.Builder(this, R.style.Theme_AlertDialog)
+                .setTitle(R.string.acknowledgments)
+                .setMessage(mode == ACK_ALL ? R.string.ack_enable_all_prompt : R.string.ack_enable_addressed_prompt)
+                .setPositiveButton(R.string.enable, (dialog, which) -> {
+                    ackMode = mode;
+                    updateAckMenu();
+                })
+                .setNegativeButton(R.string.cancel, (dialog, which) -> updateAckMenu())
+                .show();
+    }
+
+    private void updateAckMenu() {
+        if (menu == null)
+            return;
+        int id = ackMode == ACK_ALL ? R.id.action_ack_all : ackMode == ACK_ADDRESSED ? R.id.action_ack_addressed : R.id.action_ack_off;
+        menu.findItem(id).setChecked(true);
+    }
+
     private void transmitMessage(String message, boolean encrypt) {
+        transmitMessage(message, encrypt, false);
+    }
+
+    private void transmitMessage(String message, boolean encrypt, boolean isAcknowledgment) {
         if (isRadioConnected() && radioLink.isTransmitting()) {
             Toast.makeText(this, R.string.radio_busy, Toast.LENGTH_SHORT).show();
             return;
@@ -2397,11 +2533,15 @@ public class MainActivity extends AppCompatActivity {
         stopListening();
         byte[] mesg = Arrays.copyOf(finalMessage.getBytes(StandardCharsets.UTF_8), payload.length);
 
-        if (message.length() == 0) {
+        if (isAcknowledgment) {
+            addLine(callSign.trim(), getString(R.string.ack_sent));
+        } else if (message.length() == 0) {
             addLine(callSign.trim(), getString(R.string.sent_ping));
         } else {
             String displayMessage = encrypt ? message : finalMessage;
-            addMessage(callSign.trim(), getString(R.string.transmitted), displayMessage);
+            String entry = addMessage(callSign.trim(), getString(R.string.transmitted), displayMessage);
+            // The receiver computes the same ID from what it receives (the ciphertext when encrypted)
+            sentMessagesById.put(acknowledgmentId(finalMessage.trim()), entry);
         }
 
         configureEncoder(mesg, callTerm(), carrierFrequency, noiseSymbols, fancyHeader);

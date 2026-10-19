@@ -106,6 +106,17 @@
     </item>
 
     <!-- Repeater mode -->
+    <!-- Automatic acknowledgments -->
+    <item android:title="@string/acknowledgments">
+        <menu>
+            <group android:checkableBehavior="single">
+                <item android:id="@+id/action_ack_off" android:title="@string/ack_off" />
+                <item android:id="@+id/action_ack_addressed" android:title="@string/ack_addressed" />
+                <item android:id="@+id/action_ack_all" android:title="@string/ack_all" />
+            </group>
+        </menu>
+    </item>
+
     <!-- Bluetooth radio (BTech UV-Pro / Vero VR-N76) -->
     <item android:title="@string/bluetooth_radio">
         <menu>
