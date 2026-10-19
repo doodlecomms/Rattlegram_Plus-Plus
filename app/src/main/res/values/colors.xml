@@ -6,5 +6,5 @@
     <color name="thin">#FFE0E0E0</color>
     <color name="white">#FFFFFFFF</color>
     <color name="tint">#FF000000</color>
-    <color name="beacon_green">#00E676</color>   <!-- 信标开启时的绿色 -->
+    <color name="beacon_green">#00E676</color>   <!-- Green shown while the beacon is on -->
 </resources>

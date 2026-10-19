@@ -934,6 +934,7 @@ public class MainActivity extends AppCompatActivity {
         handler = new Handler(getMainLooper());
         radioLink = new RadioLink(radioListener);
         setContentView(binding.getRoot());
+        setTitle(R.string.app_title);
         handleInsets();
         stagedCFO = new float[1];
         stagedMode = new int[1];
@@ -1227,10 +1228,9 @@ public class MainActivity extends AppCompatActivity {
     /**
      * Open map:
      * 1. First try the system default map app (geo: URI) with a pin title.
-     * 2. If no map app is available, open Tencent Maps web in a browser.
+     * 2. If no map app is available, open OpenStreetMap in a browser.
      * Pin title is "callSign[note]"; if the note is empty only the call sign is shown;
      * if the call sign is empty it falls back to the default location label.
-     * Title and address are truncated to 10 characters for Tencent Maps component compatibility.
      */
     private void openMap(double lat, double lng, String pinCall, String pinNote) {
         if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
@@ -1264,23 +1264,10 @@ public class MainActivity extends AppCompatActivity {
             // No map app; fall through to browser
         }
 
-        // 2. No map app; open Tencent Maps web in a browser.
-        // Tencent Maps component expects coord:latitude,longitude (lat,lng).
-        // title and addr are limited to 10 Chinese characters; truncate if necessary.
-        String title = label;
-        if (title.length() > 10) {
-            title = title.substring(0, 10);
-        }
-        String addr = getString(R.string.location_default_label);
-        if (addr.length() > 10) {
-            addr = addr.substring(0, 10);
-        }
+        // 2. No map app; open OpenStreetMap in a browser with a marker at the location.
         String url = String.format(Locale.US,
-                "https://mapapi.qq.com/web/mapComponents/locationMarker/v/index.html" +
-                        "?marker=coord:%.6f,%.6f;title:%s;addr:%s",
-                lat, lng,
-                Uri.encode(title),
-                Uri.encode(addr));
+                "https://www.openstreetmap.org/?mlat=%.6f&mlon=%.6f#map=16/%.6f/%.6f",
+                lat, lng, lat, lng);
 
         Intent browserIntent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
 

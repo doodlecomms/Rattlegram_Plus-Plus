@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-	<string name="app_name">Rattlegram Plus</string>
+	<string name="app_name">Rattlegram Plus Plus</string>
+	<!-- Shorter name for the title bar, where the full name gets cut off -->
+	<string name="app_title">Rattlegram++</string>
 	<string name="decoder_settings">Decoder Settings</string>
 	<string name="encoder_settings">Encoder Settings</string>
 	<string name="delete">Delete</string>
@@ -109,21 +111,25 @@
 \n\nWARNING:\nThe higher sampling rates (44.1 and 48 kHz) enable carrier frequencies above 16 kHz for ultrasonic transmissions. Prolonged exposure to high pitched sounds can damage your hearing, even if you can\'t hear them.
 	</string>
 	<string name="privacy_policy">Privacy Policy</string>
-	<string name="privacy_policy_text">To be able to decode COFDMTV encoded text messages, Rattlegram Plus needs access to the microphone.
-Having access to the microphone is considered to be a sensitive permission and you have the right to know what Rattlegram Plus does with that access:
+	<string name="privacy_policy_text">To be able to decode COFDMTV encoded text messages, Rattlegram Plus Plus needs access to the microphone.
+Having access to the microphone is considered to be a sensitive permission and you have the right to know what Rattlegram Plus Plus does with that access:
 The data recorded from the microphone is only used to feed the COFDMTV decoder and spectrum analyzer for the visualization of its frequency content.
-Rattlegram Plus uses a very small temporary buffer in volatile memory and constantly overwrites that buffer with new data from the microphone.
+Rattlegram Plus Plus uses a very small temporary buffer in volatile memory and constantly overwrites that buffer with new data from the microphone.
 The resulting text message from the COFDMTV decoder is the only data that gets stored in persistent storage on your device.</string>
-	<string name="about">About Rattlegram Plus</string>
-	<string name="about_text">Rattlegram %1$s\nCopyright 2022 aicodix GmbH
-\n\nRattlegram Plus %1$s\nCopyright 2026 BI3BJU
-\n\nopen source: https://github.com/BI3BJU
+	<string name="about">About Rattlegram Plus Plus</string>
+	<string name="about_text">Rattlegram Plus Plus %1$s
+\n\nby doodlecomms\nhttps://github.com/doodlecomms/Rattlegram_Plus-Plus
+\n\nBased on Rattlegram Plus by BI3BJU\nhttps://github.com/BI3BJU/Rattlegram_Plus
+\n\nand on Rattlegram, Copyright 2022 aicodix GmbH\nhttps://github.com/aicodix/rattlegram
 \n\nPlease read DISCLAIMER at the bottom of this page.
-\n\nRattlegram Plus transmits short text messages as COFDMTV encoded audio and is based on open-source software:
+\n\nRattlegram Plus Plus transmits short text messages as COFDMTV encoded audio and is based on open-source software:
 \n\nOFDM modem implementation and specification:\nhttps://github.com/aicodix/modem\nBSD Zero Clause License
 \n\nPolar list and ordered statistics decoding:\nhttps://github.com/aicodix/code\nBSD Zero Clause License
 \n\nDigital signal processing:\nhttps://github.com/aicodix/dsp\nBSD Zero Clause License
 \n\nFancy header font:\nhttp://terminus-font.sourceforge.net\nSIL Open Font License
+\n\nBluetooth radio audio (SBC codec):\nhttps://github.com/google/libsbc\nApache License 2.0
+\n\nQR codes:\nhttps://github.com/zxing/zxing\nhttps://github.com/journeyapps/zxing-android-embedded\nApache License 2.0
+\n\nBTech UV-Pro / Vero VR-N76 Bluetooth protocol details from HTCommander:\nhttps://github.com/Ylianst/HTCommander
 \n\nDISCLAIMER:\nTHE SOFTWARE IS PROVIDED \"AS IS\" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.</string>
 	<string name="base37_characters">(space, 0–9, A-Z)</string>
 

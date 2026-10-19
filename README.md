@@ -1,158 +1,96 @@
-# Rattlegram Plus
+# Rattlegram Plus Plus
 
-[![License](https://img.shields.io/badge/License-0BSD-blue.svg)](LICENSE)
-[![Kotlin](https://img.shields.io/badge/Kotlin-1.9+-purple)](https://kotlinlang.org/)
-[![API](https://img.shields.io/badge/API-21%2B-brightgreen)](https://developer.android.com/)
-[![Platform](https://img.shields.io/badge/Platform-Android-green)](https://www.android.com/)
-[![JNI](https://img.shields.io/badge/JNI-C%2B%2B-orange)](https://github.com/BI3BJU/rattlegram-plus)
-[![GitHub last commit](https://img.shields.io/github/last-commit/BI3BJU/rattlegram-plus)](https://github.com/BI3BJU/rattlegram-plus)
+Short text messages sent as sound — through the phone's speaker and microphone, a cable to a radio, or **wirelessly over Bluetooth to a BTech UV-Pro / Vero VR-N76**. No Wi-Fi or cellular network needed.
 
-Rattlegram Plus is an Android app that enables short-range text communication via audio modulation/demodulation. It can encode text messages into audible or ultrasonic audio signals and decode these signals from the microphone, enabling point-to-point messaging without Wi‑Fi, Bluetooth, or cellular networks.
-
-This project is a continuation of the original Rattlegram, enhanced with end-to-end encryption, location sharing, loop beacon, and a modern Material Design interface.
-
-## Screenshots
+Rattlegram Plus Plus is an independent fork of [Rattlegram Plus](https://github.com/BI3BJU/Rattlegram_Plus) by BI3BJU, which itself builds on [Rattlegram](https://github.com/aicodix/rattlegram) by aicodix. It installs **alongside** Rattlegram Plus (it has its own app ID) and uses the same over-the-air format, so messages, pings and encrypted messages (with the same password) should work between the two apps.
 
 | Main interface |
 | :---: |
 | ![Main interface](./main.jpg) |
 
-## Features
+## What's new in Plus Plus
 
-- 📡 **Audio-based messaging** – Send and receive text through sound (speaker and microphone).
-- 🔐 **End-to-end encryption** – Optional password-based AES encryption (256-bit) for privacy.
-- 📍 **Location sharing** – Share your GPS coordinates; recipients can open them in any map app.
-- 🔁 **Relay mode** – Automatically repeat received messages (with debounce and delay).
-- 📶 **Spectrum analyzer** – Real-time FFT and waterfall display for signal tuning.
-- 🕊️ **Loop beacon** – Periodically send a ping (empty message) for presence detection.
-- 🎚️ **Flexible audio settings** – Sample rate, channel selection, audio source, carrier frequency, noise symbols.
-- 🌙 **Night mode** – Dark theme support.
-- 📨 **Message history** – Persistently stored and displayed as sent/received bubbles.
-- 🗺️ **Send location** – Tap a received location message to open it in the system default app.
-- 👤 **Contacts** – Automatically save new callsigns, mention contacts with @, and prompt when your own callsign is received.
+- 📻 **Bluetooth radio audio** — Menu → Bluetooth Radio connects to a paired **BTech UV-Pro** (and, by the same protocol, **Vero VR-N76**). Receive and transmit go over Bluetooth; the radio keys while it receives audio and is always unkeyed afterwards. No cable or DigiRig.
+- 🔇 **Automatic radio speaker mute** — while connected, the radio's speaker is muted and its volume restored on disconnect (also after an unexpected drop).
+- 🪖 **SALUTE report** — a form for Size, Activity, Location, Unit, Time, Equipment. Location from GPS as Lat/Long, Maidenhead or MGRS (or typed); time in UTC or local; a live byte counter so the report fits, including in encrypted messages.
+- 🔑 **Password by QR code** — show the encryption password as a QR code, scan it on the other phone, or paste it. No more typing 64 random characters.
+- ☑️ **Encrypt checkbox remembers** its last setting.
+- 🗑️ **Delete Messages on Close** (optional, Danger Zone).
+- 🧩 Fixed overlapping buttons in the password dialog.
 
-## How It Works
+## Everything from Rattlegram Plus
 
-The app uses a native C++ library (`librattlegram.so`) to perform FSK-based modulation and demodulation. Text messages are converted into audio frames, played through the speaker, and received through the microphone. The decoder synchronizes to the incoming signal, extracts the payload, and displays it.
+- 📡 Audio-based messaging (audible or ultrasonic)
+- 🔐 Optional end-to-end encryption (AES-256-GCM, password based)
+- 📍 Location sharing, opened in any map app
+- 🔁 Repeater (relay) mode, 🕊️ loop beacon, 📶 spectrum analyzer
+- 👤 Contacts, 🌙 night mode, persistent message history
+- 🎚️ Sample rate, channel, audio source, carrier frequency and leading-noise settings
 
-- **Encoder** – Packs your message into structured frames (header + payload), adds error-correction symbols, and generates PCM audio samples.
-- **Decoder** – Continuously analyzes microphone input, detects the preamble, synchronizes, and extracts the raw data.
-- **Encryption** – When enabled, messages are encrypted before encoding and decrypted after decoding using the configured password.
+## Install
 
-## Installation
+1. Download the latest APK from the [Releases page](https://github.com/doodlecomms/Rattlegram_Plus-Plus/releases).
+2. Allow your browser or file manager to install unknown apps when Android asks.
+3. Install and open it, then allow the microphone (needed to receive) and, if you want GPS features, location.
 
-1. Download the latest APK from the [Releases page](https://github.com/BI3BJU/Rattlegram_Plus/releases).
-2. Enable **Install from unknown sources** in Android settings.
-3. Install and launch the app.
-4. Grant microphone and location permissions when prompted.
+Requires Android 7.0 or newer.
 
-> ⚠️ This app requires Android 5.0 (API 21) or higher.
+> The early `v0.1-test` build used Rattlegram Plus's app ID. If you installed it, uninstall it before installing Plus Plus.
 
-## Building from Source
+## Using a BTech UV-Pro over Bluetooth
 
-Clone the repository:
+1. **Pair the radio once:** put the UV-Pro in pairing mode (its light flashes red and green — see the radio's manual), then pair it in Android's Bluetooth settings. It shows up as `UV-PRO`. *(Menu → Bluetooth Radio → Connect / Disconnect → Pair new radio walks through this.)*
+2. **Close other apps that use the radio**, such as HTCommander — the radio allows one connection at a time.
+3. **Menu → Bluetooth Radio → Connect / Disconnect**, pick the radio, tap Connect. The status shows *Listening via UV-PRO*.
+4. Send and receive as usual. While connected the microphone is off and the audio rate/channel settings are locked.
+
+Tested with a UV-Pro (firmware 0.9.3) and Samsung Galaxy A15 phones. The Vero VR-N76 uses the same protocol but has not been tested yet — reports welcome.
+
+## Sharing the encryption password
+
+Danger Zone → Password: **Generate Random Password**, then **Show QR** on one phone and **Scan QR** (or Paste) on the other, and tap Okay on both. Anyone who sees the QR code can read your encrypted messages, so only show it to people you trust. The app does not save the password between launches.
+
+## Building from source
 
 ```bash
-git clone https://github.com/BI3BJU/Rattlegram_Plus.git
-cd rattlegram-plus
+git clone https://github.com/doodlecomms/Rattlegram_Plus-Plus.git
+cd Rattlegram_Plus-Plus
+./gradlew assembleDebug
 ```
 
-1. Open the project in Android Studio (Arctic Fox or later).
-2. Build the native library (using CMake).
-   - JNI source code is located under `app/src/main/cpp/`.
-   - Make sure NDK and CMake are installed via SDK Manager.
-3. Build and run the app on a device or emulator.
+Open it in Android Studio, or build from the command line as above (needs the Android SDK and NDK 28.2).
 
-## Usage Guide
+**Release builds** are signed with the key described in a `keystore.properties` file in the project root (it is git-ignored and never committed):
 
-### 🗣️ Sending Messages
+```properties
+storeFile=/path/to/your-release-key.jks
+storePassword=...
+keyAlias=...
+keyPassword=...
+```
 
-1. Tap the compose button (📝) in the bottom-right corner.
-2. Enter text (up to 170 bytes).
-3. Optionally check **Encrypt** (requires setting a password in the menu).
-4. Tap **Send** – the audio will play, and the message will appear as "Sent".
-
-### 📍 Sharing Your Location
-
-1. Tap the location button (📍) in the bottom-left corner.
-2. Grant location permission if not already granted.
-3. The app will obtain the last known GPS/network location and prefill a `[LOC] geo:lat,lng` string in the compose dialog.
-4. Send it like a normal message.
-
-### 🔁 Relay Mode
-
-- Enable from the menu: **Enable relay mode**.
-- After receiving a message, it will be automatically resent after a configurable delay.
-- Debounce prevents repeated forwarding of the same message within a set time.
-
-### 📶 Spectrum Analyzer
-
-- Select **Show spectrum** from the menu.
-- A dialog appears showing real-time FFT (spectrum) and waterfall (spectrogram).
-- Use it to fine-tune the carrier frequency or check signal quality.
-
-### 🔐 Setting a Password
-
-- Open menu → **Password**.
-- Enter a password (8–256 bytes) or tap **Generate** to create a secure hex string.
-- Once set, outgoing messages can be encrypted; received encrypted messages will be decrypted automatically.
-
-### 🕊️ Loop Beacon
-
-- Tap **Ping** from the menu – the app will send an empty message every minute.
-- Tap again to stop.
-
-### 🗺️ Opening Received Locations
-
-- Tap any received message that starts with `[LOC] geo:`.
-- The system will ask which map app to use (All‑In‑One Offline Maps preferred).
+Without that file, `./gradlew assembleRelease` falls back to the debug key.
 
 ## Permissions
 
-| Permission | Purpose |
+| Permission | Why |
 | --- | --- |
-| `RECORD_AUDIO` | Microphone access. |
-| `ACCESS_FINE_LOCATION` | GPS location sharing. |
-| `POST_NOTIFICATIONS` | Optional. Not used, but may appear on newer Android versions. |
+| Microphone | Receive messages through the microphone |
+| Location | GPS for location messages and SALUTE reports |
+| Bluetooth (nearby devices) | Connect to a BTech UV-Pro / Vero VR-N76 |
+| Camera | Scan a password QR code (asked only when you tap Scan QR) |
+| Internet | Map display for received locations |
 
-## Configuration Options (Menu)
+## Credits and license
 
-| Option | Description |
-| --- | --- |
-| Output / recording sample rate | 8, 16, 32, 44.1, 48 kHz |
-| Channel selection | Mono / stereo / left / right / sum / analytic signal |
-| Audio source | Default, microphone, camcorder, voice recognition, unprocessed |
-| Carrier frequency | 1000 Hz – (sample rate / 2 – bandwidth) |
-| Noise symbols | Add extra FEC symbols (0–22) |
-| Relay delay | 0–8 seconds |
-| Relay debounce | 0–120 seconds (prevents echo loops) |
-| Enhanced header | Use a longer preamble for better synchronization |
-| Night mode | On / off |
-| Delete messages | Clear history |
-| Force exit | Fully exit the app |
+- **Rattlegram** — Copyright 2022 aicodix GmbH, BSD Zero Clause License. Modem, polar codes and DSP: [aicodix/modem](https://github.com/aicodix/modem), [aicodix/code](https://github.com/aicodix/code), [aicodix/dsp](https://github.com/aicodix/dsp).
+- **Rattlegram Plus** — BI3BJU: encryption, location sharing, contacts, beacon, Material UI.
+- **Rattlegram Plus Plus** — doodlecomms: the additions listed above.
+- **Bluetooth protocol details** from [HTCommander](https://github.com/Ylianst/HTCommander) by Ylian Saint-Hilaire (Apache-2.0). The code here is an independent implementation.
+- Third-party libraries and their licenses: see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
-## Libraries and Dependencies
-
-- **AndroidX** – Modern UI components and compatibility.
-- **Native C++ library** – Custom FSK modem (not included here).
-- **No external GMS / Play Services** – Location uses only Android's built-in `LocationManager`.
-
-## Contributing
-
-Contributions are welcome! Please open an issue or submit a pull request.
-
-- Use the GitHub issue tracker to report bugs and feature requests.
-- Follow the code style of the existing source code.
-
-## License
-
-This project is licensed under the 0BSD License – see the [LICENSE](LICENSE) file for details.
-
-## Acknowledgments
-
-- Original Rattlegram developed by Ahmet Inan <inan@aicodix.de>.
-- Rattlegram Plus maintained by BI3BJU <guerilla1949@gmail.com>.
+This project is released under the BSD Zero Clause License, see [LICENSE](LICENSE).
 
 ## Disclaimer
 
-This app is provided "as is" for experimental and educational purposes. The author is not responsible for any misuse or damage caused by this software.
+THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHORS DISCLAIM ALL WARRANTIES WITH REGARD TO THIS SOFTWARE. Transmit only on frequencies and with content you are licensed for. Many amateur radio rules do not allow encrypted messages — check your local regulations.

@@ -2,16 +2,24 @@ plugins {
     id 'com.android.application'
 }
 
+// Release signing key: keystore.properties in the project root (never committed, see .gitignore)
+// with storeFile, storePassword, keyAlias and keyPassword. Without it, release builds use the debug key.
+def keystorePropertiesFile = rootProject.file('keystore.properties')
+def keystoreProperties = new Properties()
+if (keystorePropertiesFile.exists())
+    keystorePropertiesFile.withInputStream { keystoreProperties.load(it) }
+
 android {
     compileSdk = 36
     ndkVersion "28.2.13676358"
 
     defaultConfig {
-        applicationId "com.bi3bju.rattlegram_plus"
+        // Rattlegram Plus Plus: its own app ID so it installs alongside Rattlegram Plus
+        applicationId "com.doodlecomms.rattlegramplusplus"
         minSdk 24        // Android 7.0 (API 24) minimum
         targetSdk 36
-        versionCode 19
-        versionName "1.18"
+        versionCode 100
+        versionName "1.0.0"
 
         externalNativeBuild {
             cmake {
@@ -24,12 +32,23 @@ android {
         includeInApk = false
     }
 
+    signingConfigs {
+        release {
+            if (keystorePropertiesFile.exists()) {
+                storeFile rootProject.file(keystoreProperties['storeFile'])
+                storePassword keystoreProperties['storePassword']
+                keyAlias keystoreProperties['keyAlias']
+                keyPassword keystoreProperties['keyPassword']
+            }
+        }
+    }
+
     buildTypes {
         release {
             crunchPngs false
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
-            signingConfig signingConfigs.debug
+            signingConfig keystorePropertiesFile.exists() ? signingConfigs.release : signingConfigs.debug
         }
     }
 
