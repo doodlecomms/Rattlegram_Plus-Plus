@@ -147,6 +147,7 @@ public class MainActivity extends AppCompatActivity {
     private boolean repeaterMode;
     private boolean encryptMessage;
     private boolean deleteMessagesOnClose;
+    private boolean hideCallSign;
     // Automatic acknowledgments: ACK_OFF, ACK_ADDRESSED (messages starting with @MYCALL) or ACK_ALL
     private int ackMode;
     private static final int ACK_OFF = 0, ACK_ADDRESSED = 1, ACK_ALL = 2;
@@ -412,8 +413,14 @@ public class MainActivity extends AppCompatActivity {
                         if (picturePart != null) {
                             handlePicturePart(sender, picturePart, received);
                         } else if (!handleAcknowledgment(sender, received)) {
-                            autoSaveContact(sender);
-                            addMessage(sender, getString(R.string.received), received);
+                            String[] hidden = HiddenCall.unwrap(CryptoUtils.decrypt(received, password));
+                            if (hidden != null) {
+                                autoSaveContact(hidden[0]);
+                                addMessage(hidden[0], getString(R.string.received_hidden), hidden[1]);
+                            } else {
+                                autoSaveContact(sender);
+                                addMessage(sender, getString(R.string.received), received);
+                            }
                             maybeAcknowledge(received);
                         }
                     }
@@ -804,6 +811,7 @@ public class MainActivity extends AppCompatActivity {
         state.putBoolean("repeaterMode", repeaterMode);
         state.putBoolean("encryptMessage", encryptMessage);
         state.putBoolean("deleteMessagesOnClose", deleteMessagesOnClose);
+        state.putBoolean("hideCallSign", hideCallSign);
         state.putInt("ackMode", ackMode);
         for (int i = 0; i < messages.getCount(); ++i)
             state.putString("m" + i, messages.getItem(i));
@@ -829,6 +837,7 @@ public class MainActivity extends AppCompatActivity {
         edit.putBoolean("repeaterMode", repeaterMode);
         edit.putBoolean("encryptMessage", encryptMessage);
         edit.putBoolean("deleteMessagesOnClose", deleteMessagesOnClose);
+        edit.putBoolean("hideCallSign", hideCallSign);
         edit.putInt("ackMode", ackMode);
         for (int i = 0; i < messages.getCount(); ++i)
             edit.putString("m" + i, messages.getItem(i));
@@ -968,6 +977,7 @@ public class MainActivity extends AppCompatActivity {
             repeaterMode = pref.getBoolean("repeaterMode", defaultRepeaterMode);
             encryptMessage = pref.getBoolean("encryptMessage", defaultEncryptMessage);
             deleteMessagesOnClose = pref.getBoolean("deleteMessagesOnClose", defaultDeleteMessagesOnClose);
+            hideCallSign = pref.getBoolean("hideCallSign", false);
             ackMode = pref.getInt("ackMode", ACK_OFF);
             // A fresh start means the app was closed since it was last used. Closing by swiping the
             // app away gives no reliable chance to clean up, so finish the job here.
@@ -995,6 +1005,7 @@ public class MainActivity extends AppCompatActivity {
             repeaterMode = state.getBoolean("repeaterMode", defaultRepeaterMode);
             encryptMessage = state.getBoolean("encryptMessage", defaultEncryptMessage);
             deleteMessagesOnClose = state.getBoolean("deleteMessagesOnClose", defaultDeleteMessagesOnClose);
+            hideCallSign = state.getBoolean("hideCallSign", false);
             ackMode = state.getInt("ackMode", ACK_OFF);
             for (int i = 0; i < 100; ++i) {
                 String mesg = state.getString("m" + i, null);
@@ -1974,6 +1985,39 @@ public class MainActivity extends AppCompatActivity {
                 .show();
     }
 
+    /** Applies the password dialog's "Hide my call sign" box; turning it on needs the warning accepted first. */
+    private void setHideCallSign(boolean hide) {
+        if (!hide || hideCallSign) {
+            hideCallSign = hide;
+            storeSettings();
+            return;
+        }
+        new AlertDialog.Builder(this, R.style.Theme_AlertDialog)
+                .setTitle(R.string.hide_call_sign)
+                .setMessage(R.string.hide_call_sign_prompt)
+                .setPositiveButton(R.string.enable, (dialog, which) -> {
+                    hideCallSign = true;
+                    storeSettings();
+                })
+                .setNegativeButton(R.string.cancel, null)
+                .show();
+    }
+
+    /** Shows the "call sign hidden" note under an Encrypt box while an encrypted message would hide it. */
+    private void updateHiddenNote(TextView note, CheckBox encrypt) {
+        note.setVisibility(encrypt.isChecked() && encrypt.isEnabled() && hidingCallSign() ? View.VISIBLE : View.GONE);
+    }
+
+    /** True when an encrypted transmission should carry the call sign inside the encryption instead of the header. */
+    private boolean hidingCallSign() {
+        return hideCallSign && password != null && !password.isEmpty() && hasRealCallSign();
+    }
+
+    /** Extra bytes the hidden call sign takes from an encrypted message, or 0 when it is not hidden. */
+    private int hiddenCallOverhead() {
+        return hidingCallSign() ? HiddenCall.overhead(callSign.trim()) : 0;
+    }
+
     private void forcedQuit() {
         AlertDialog.Builder builder = new AlertDialog.Builder(this, R.style.Theme_AlertDialog);
         builder.setTitle(R.string.force_quit)
@@ -2074,7 +2118,9 @@ public class MainActivity extends AppCompatActivity {
 
                 int[] thresholds;
                 if (encrypt) {
-                    thresholds = new int[]{35, 68, 99};
+                    // A hidden call sign travels inside the encryption and takes from the same space
+                    int o = hiddenCallOverhead();
+                    thresholds = new int[]{35 - o, 68 - o, 99 - o};
                 } else {
                     thresholds = new int[]{85, 128, 170};
                 }
@@ -2114,8 +2160,11 @@ public class MainActivity extends AppCompatActivity {
         };
         edit.addTextChangedListener(textWatcher);
 
+        TextView hiddenNote = view.findViewById(R.id.call_sign_hidden_note);
+        updateHiddenNote(hiddenNote, encryptCheck);
         encryptCheck.setOnCheckedChangeListener((buttonView, isChecked) -> {
             encryptMessage = isChecked;
+            updateHiddenNote(hiddenNote, encryptCheck);
             String text = edit.getText().toString();
             textWatcher.onTextChanged(text, 0, 0, 0);
         });
@@ -2174,7 +2223,7 @@ public class MainActivity extends AppCompatActivity {
         };
 
         // Same limits as the compose window: 170 bytes plain, 99 bytes before encryption
-        final int limit = encrypted ? 99 : 170;
+        final int limit = encrypted ? 99 - hiddenCallOverhead() : 170;
         Runnable updateBytes = () -> {
             String report = SaluteReport.build(sizeEdit.getText().toString(), activityEdit.getText().toString(),
                     locationEdit.getText().toString(), unitEdit.getText().toString(),
@@ -2557,7 +2606,12 @@ public class MainActivity extends AppCompatActivity {
         };
         sizeGroup.setOnCheckedChangeListener((group, id) -> update.run());
         robustCheck.setOnCheckedChangeListener((b, c) -> update.run());
-        encryptCheck.setOnCheckedChangeListener((b, c) -> update.run());
+        TextView hiddenNote = view.findViewById(R.id.call_sign_hidden_note);
+        encryptCheck.setOnCheckedChangeListener((b, c) -> {
+            updateHiddenNote(hiddenNote, encryptCheck);
+            update.run();
+        });
+        updateHiddenNote(hiddenNote, encryptCheck);
         update.run();
     }
 
@@ -2571,7 +2625,9 @@ public class MainActivity extends AppCompatActivity {
         List<String> packets;
         try {
             int id = new java.security.SecureRandom().nextInt(0x10000);
-            packets = PictureCodec.buildPackets(image, encrypt ? password : null,
+            // The hidden call sign rides inside the encrypted picture
+            byte[] content = encrypt && hidingCallSign() ? HiddenCall.wrap(callSign.trim(), image) : image;
+            packets = PictureCodec.buildPackets(content, encrypt ? password : null,
                     robust ? PictureCodec.ROBUST_PACKET_CHARS : PictureCodec.FAST_PACKET_CHARS, id);
         } catch (Exception e) {
             Toast.makeText(this, R.string.picture_too_large, Toast.LENGTH_SHORT).show();
@@ -2628,7 +2684,8 @@ public class MainActivity extends AppCompatActivity {
                 startListening();
                 return;
             }
-            sendOnAir(queue.get(pictureQueuePos++));
+            String part = queue.get(pictureQueuePos++);
+            sendOnAir(part, PictureCodec.isEncrypted(part) && hidingCallSign());
             pictureLastBusy = System.currentTimeMillis();
             pictureSendingEntry = replaceBody(pictureSendingEntry,
                     pictureBody(pictureSendingName, encrypted, getString(R.string.picture_sending, pictureQueuePos, queue.size())));
@@ -2665,6 +2722,12 @@ public class MainActivity extends AppCompatActivity {
 
     private void finishIncomingPicture(IncomingPicture in) {
         byte[] image = in.assembly.assemble(password);
+        String hiddenCall = image == null || !in.assembly.encrypted ? null : HiddenCall.callIn(image);
+        if (hiddenCall != null) {
+            image = HiddenCall.strip(image, hiddenCall);
+            autoSaveContact(hiddenCall);
+            in.entry = replaceTitle(in.entry, hiddenCall, getString(R.string.received_hidden));
+        }
         if (image == null || PictureUtil.decode(image) == null) {
             if (in.assembly.encrypted) {
                 in.locked = true;
@@ -2737,6 +2800,22 @@ public class MainActivity extends AppCompatActivity {
     }
 
     /** Replaces the message text below the title line of a list entry; returns the new entry. */
+    /** Replaces the call sign and status in an entry's first line, keeping its time and body. */
+    private String replaceTitle(String entry, String call, String info) {
+        int nl = entry.indexOf('\n');
+        String first = nl < 0 ? entry : entry.substring(0, nl);
+        int dash = first.indexOf(" - ");
+        String time = dash < 0 ? currentTime() : first.substring(0, dash);
+        String updated = getString(R.string.title_line, time, appendContactNote(call), info) + ":" + (nl < 0 ? "" : entry.substring(nl));
+        int position = messages.getPosition(entry);
+        if (position >= 0) {
+            messages.remove(entry);
+            messages.insert(updated, position);
+            storeSettings();
+        }
+        return updated;
+    }
+
     private String replaceBody(String entry, String body) {
         int nl = entry.indexOf('\n');
         String updated = (nl < 0 ? entry : entry.substring(0, nl)) + "\n" + body;
@@ -2857,6 +2936,12 @@ public class MainActivity extends AppCompatActivity {
 
     /** If text is an "ACK xxxx" reply, marks the matching sent message and returns true. */
     private boolean handleAcknowledgment(String sender, String text) {
+        // An acknowledgment from a station hiding its call sign is encrypted, with the call sign inside
+        String[] hidden = HiddenCall.unwrap(CryptoUtils.decrypt(text, password));
+        if (hidden != null) {
+            sender = hidden[0];
+            text = hidden[1];
+        }
         java.util.regex.Matcher m = ACK_PATTERN.matcher(text);
         if (!m.matches())
             return false;
@@ -2884,6 +2969,9 @@ public class MainActivity extends AppCompatActivity {
             String decrypted = CryptoUtils.decrypt(received, password);
             if (decrypted != null)
                 text = decrypted;
+            String[] hidden = HiddenCall.unwrap(text);
+            if (hidden != null)
+                text = hidden[1];
             if (!text.startsWith("@" + callSign.trim() + " "))
                 return;
         }
@@ -2905,7 +2993,8 @@ public class MainActivity extends AppCompatActivity {
                 handler.postDelayed(() -> sendAcknowledgment(reply, attemptsLeft - 1), 1500);
             return;
         }
-        transmitMessage(reply, false, true);
+        // While hiding the call sign, acknowledgments are encrypted too so the call sign can travel inside
+        transmitMessage(reply, hidingCallSign(), true);
     }
 
     private boolean hasRealCallSign() {
@@ -2961,8 +3050,9 @@ public class MainActivity extends AppCompatActivity {
         }
 
         String finalMessage = message;
+        boolean hidden = encrypt && message.length() > 0 && hidingCallSign();
         if (encrypt) {
-            String encrypted = CryptoUtils.encrypt(message, password);
+            String encrypted = CryptoUtils.encrypt(hidden ? HiddenCall.wrap(callSign.trim(), message) : message, password);
             if (encrypted == null) {
                 Toast.makeText(this, R.string.encryption_failed, Toast.LENGTH_SHORT).show();
                 return;
@@ -2992,7 +3082,7 @@ public class MainActivity extends AppCompatActivity {
             sentMessagesById.put(acknowledgmentId(finalMessage.trim()), entry);
         }
 
-        sendOnAir(finalMessage);
+        sendOnAir(finalMessage, hidden);
 
         if (wasBeaconRunning) {
             beaconRunnable = new Runnable() {
@@ -3009,10 +3099,11 @@ public class MainActivity extends AppCompatActivity {
     }
 
     /** Transmits text as one Rattlegram message (speaker or Bluetooth radio), without touching the message list. */
-    private void sendOnAir(String text) {
+    private void sendOnAir(String text, boolean hideCall) {
         stopListening();
         byte[] mesg = Arrays.copyOf(text.getBytes(StandardCharsets.UTF_8), payload.length);
-        configureEncoder(mesg, callTerm(), carrierFrequency, noiseSymbols, fancyHeader);
+        byte[] call = hideCall ? Arrays.copyOf(HiddenCall.PLACEHOLDER.getBytes(StandardCharsets.US_ASCII), HiddenCall.PLACEHOLDER.length() + 1) : callTerm();
+        configureEncoder(mesg, call, carrierFrequency, noiseSymbols, fancyHeader);
         if (isRadioConnected()) {
             transmitViaRadio(0);
         } else {
@@ -3186,6 +3277,8 @@ public class MainActivity extends AppCompatActivity {
         Button okButton = view.findViewById(R.id.button_okay);
         CheckBox rememberCheck = view.findViewById(R.id.remember_password);
         rememberCheck.setChecked(PasswordStore.isRemembered(this));
+        CheckBox hideCheck = view.findViewById(R.id.hide_call_sign);
+        hideCheck.setChecked(hideCallSign);
 
         editText.setText(password);
         editText.setSelection(password.length());
@@ -3252,6 +3345,7 @@ public class MainActivity extends AppCompatActivity {
             if (newPassword.isEmpty()) {
                 password = "";
                 PasswordStore.clear(this);
+                setHideCallSign(hideCheck.isChecked());
                 errorText.setVisibility(View.GONE);
                 Toast.makeText(this, R.string.password_updated, Toast.LENGTH_SHORT).show();
                 dialog.dismiss();
@@ -3266,6 +3360,7 @@ public class MainActivity extends AppCompatActivity {
             }
 
             password = newPassword;
+            setHideCallSign(hideCheck.isChecked());
             if (!rememberCheck.isChecked()) {
                 PasswordStore.clear(this);
                 Toast.makeText(this, R.string.password_updated, Toast.LENGTH_SHORT).show();

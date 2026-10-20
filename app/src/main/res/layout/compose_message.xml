@@ -56,4 +56,14 @@
             android:gravity="end"
             android:textSize="14sp" />
     </LinearLayout>
+
+    <TextView
+        android:id="@+id/call_sign_hidden_note"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:paddingStart="8dp"
+        android:paddingEnd="8dp"
+        android:text="@string/call_sign_hidden_note"
+        android:textSize="12sp"
+        android:visibility="gone" />
 </LinearLayout>
