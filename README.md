@@ -12,9 +12,9 @@ Short text messages sent as sound — through the phone's speaker and microphone
 
 Rattlegram Plus Plus is an independent fork of [Rattlegram Plus](https://github.com/BI3BJU/Rattlegram_Plus) by BI3BJU, which itself builds on [Rattlegram](https://github.com/aicodix/rattlegram) by aicodix. It installs **alongside** Rattlegram Plus (it has its own app ID) and uses the same over-the-air format, so messages, pings and encrypted messages (with the same password) should work between the two apps.
 
-| Main interface |
-| :---: |
-| ![Main interface](./main.jpg) |
+| Encrypted message | Encrypted picture | Wipe All Data | Danger Zone |
+| :---: | :---: | :---: | :---: |
+| <img src="docs/screenshots/compose.png" width="200" alt="Compose window with Encrypt ticked and the call sign hidden note"> | <img src="docs/screenshots/picture.png" width="200" alt="Send a picture window with size, Robust and Encrypt options"> | <img src="docs/screenshots/wipe.png" width="200" alt="Wipe All Data confirmation"> | <img src="docs/screenshots/danger.png" width="200" alt="Danger Zone menu with Lock App on Open"> |
 
 ## What's new in Plus Plus
 
