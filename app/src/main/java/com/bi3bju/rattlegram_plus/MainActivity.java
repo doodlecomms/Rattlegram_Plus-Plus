@@ -2809,6 +2809,20 @@ public class MainActivity extends AppCompatActivity {
             if (plain == null)
                 continue;
             String[] hidden = HiddenCall.unwrap(plain);
+            java.util.regex.Matcher ack = ACK_PATTERN.matcher(hidden != null ? hidden[1] : plain);
+            if (ack.matches()) {
+                // An acknowledgment that arrived before the password: a matched one becomes the ✓ on our
+                // sent message, any other one a plain line, never a message bubble
+                String call = hidden != null ? hidden[0] : parseCallAndNote(entry.substring(0, nl))[0];
+                int position = messages.getPosition(entry);
+                messages.remove(entry);
+                if (!markAcknowledged(call, ack.group(1), new Date())) {
+                    String time = entry.substring(0, entry.indexOf(" - "));
+                    messages.insert(getString(R.string.title_line, time, appendContactNote(call), getString(R.string.ack_other)), position);
+                }
+                storeSettings();
+                continue;
+            }
             if (hidden != null) {
                 autoSaveContact(hidden[0]);
                 replaceBody(replaceTitle(entry, hidden[0], getString(R.string.received_hidden)), hidden[1]);
@@ -2981,17 +2995,22 @@ public class MainActivity extends AppCompatActivity {
         java.util.regex.Matcher m = ACK_PATTERN.matcher(text);
         if (!m.matches())
             return false;
-        String entry = sentMessagesById.get(m.group(1));
-        int position = entry == null ? -1 : messages.getPosition(entry);
-        if (position < 0) {
+        if (!markAcknowledged(sender, m.group(1), new Date()))
             addLine(sender, getString(R.string.ack_other));
-            return true;
-        }
-        String time = new SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(new Date());
+        return true;
+    }
+
+    /** Adds "Acknowledged by" to the sent message with this ID; false if it is not (or no longer) in the list. */
+    private boolean markAcknowledged(String sender, String id, Date when) {
+        String entry = sentMessagesById.get(id);
+        int position = entry == null ? -1 : messages.getPosition(entry);
+        if (position < 0)
+            return false;
+        String time = new SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(when);
         String updated = entry + "\n" + getString(R.string.ack_received, sender, time);
         messages.remove(entry);
         messages.insert(updated, position);
-        sentMessagesById.put(m.group(1), updated);
+        sentMessagesById.put(id, updated);
         storeSettings();
         return true;
     }
