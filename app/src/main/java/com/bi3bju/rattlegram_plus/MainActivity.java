@@ -2806,7 +2806,8 @@ public class MainActivity extends AppCompatActivity {
         box.addView(encrypt);
         new AlertDialog.Builder(this, R.style.Theme_AlertDialog)
                 .setTitle(R.string.resend_title)
-                .setMessage(body)
+                // Without a password it can only go out in the clear, so say so plainly
+                .setMessage(canEncrypt ? body : body + "\n\n" + getString(R.string.resend_unencrypted_warning))
                 .setView(box)
                 .setPositiveButton(R.string.resend, (d, w) -> transmitMessage(body, encrypt.isChecked()))
                 .setNegativeButton(R.string.cancel, null)

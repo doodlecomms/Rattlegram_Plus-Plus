@@ -205,6 +205,7 @@ The resulting text message from the COFDMTV decoder is the only data that gets s
 	<string name="resend">Send</string>
 	<string name="resend_unreadable">This message is still encrypted (this phone does not have its password), so it cannot be sent again.</string>
 	<string name="resend_picture">To send a picture again, tap it and choose Send again.</string>
+	<string name="resend_unencrypted_warning">⚠ No password is set, so this will be sent UNENCRYPTED. Anyone listening can read it.</string>
 	<!-- Pictures -->
 	<string name="picture_button">Picture</string>
 	<string name="picture">Picture</string>
