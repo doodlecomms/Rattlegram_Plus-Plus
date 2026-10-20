@@ -252,6 +252,9 @@ The resulting text message from the COFDMTV decoder is the only data that gets s
 	<string name="hide_call_sign_prompt">Encrypted messages, locations, pictures and acknowledgments will show ANONYMOUS on the air. Your call sign is sent inside the encryption, so only stations with the password (and Rattlegram++ 1.2 or later) can see who sent them. Each message loses a few characters to carry it.\n\nOn amateur radio bands, transmissions must identify the station and encryption is generally not allowed. Use this only where it is legal. Enable this?</string>
 	<string name="call_sign_hidden_note">🔒 Call sign hidden (sent as ANONYMOUS)</string>
 	<string name="received_hidden">Received (call sign hidden)</string>
+	<string name="wipe_all_data">Wipe All Data</string>
+	<string name="wipe_all_data_prompt">Permanently erase everything Rattlegram++ has stored on this phone: all messages, pictures and locations, the password (typed and saved), your call sign, contacts and all settings. The app will close. This cannot be undone.</string>
+	<string name="wipe">Wipe</string>
 	<!-- SALUTE report -->
 	<string name="salute_button">SALUTE Report</string>
 	<string name="salute_title">SALUTE Report</string>

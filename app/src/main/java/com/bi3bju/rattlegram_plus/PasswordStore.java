@@ -81,6 +81,17 @@ final class PasswordStore {
         prefs(context).edit().clear().apply();
     }
 
+    /** Forgets the password and destroys its Keystore key, so nothing saved can ever be decrypted again. */
+    static void destroy(Context context) {
+        prefs(context).edit().clear().commit();
+        try {
+            KeyStore keyStore = KeyStore.getInstance(KEYSTORE);
+            keyStore.load(null);
+            keyStore.deleteEntry(KEY_ALIAS);
+        } catch (Exception ignored) {
+        }
+    }
+
     private static SharedPreferences prefs(Context context) {
         return context.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
     }

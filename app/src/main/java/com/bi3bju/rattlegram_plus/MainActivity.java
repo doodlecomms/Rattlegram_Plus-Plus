@@ -148,6 +148,8 @@ public class MainActivity extends AppCompatActivity {
     private boolean encryptMessage;
     private boolean deleteMessagesOnClose;
     private boolean hideCallSign;
+    /** Set while wiping all data, so nothing gets saved again on the way out. */
+    private boolean wiping;
     // Automatic acknowledgments: ACK_OFF, ACK_ADDRESSED (messages starting with @MYCALL) or ACK_ALL
     private int ackMode;
     private static final int ACK_OFF = 0, ACK_ADDRESSED = 1, ACK_ALL = 2;
@@ -819,6 +821,8 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void storeSettings() {
+        if (wiping)
+            return;
         SharedPreferences pref = getPreferences(Context.MODE_PRIVATE);
         SharedPreferences.Editor edit = pref.edit();
         edit.putInt("nightMode", AppCompatDelegate.getDefaultNightMode());
@@ -1690,6 +1694,11 @@ public class MainActivity extends AppCompatActivity {
             return true;
         }
 
+        if (id == R.id.action_wipe_all) {
+            confirmWipeAllData();
+            return true;
+        }
+
         if (id == R.id.action_ack_off) {
             setAckMode(ACK_OFF);
             return true;
@@ -2016,6 +2025,57 @@ public class MainActivity extends AppCompatActivity {
     /** Extra bytes the hidden call sign takes from an encrypted message, or 0 when it is not hidden. */
     private int hiddenCallOverhead() {
         return hidingCallSign() ? HiddenCall.overhead(callSign.trim()) : 0;
+    }
+
+    private void confirmWipeAllData() {
+        new AlertDialog.Builder(this, R.style.Theme_AlertDialog)
+                .setTitle(R.string.wipe_all_data)
+                .setMessage(R.string.wipe_all_data_prompt)
+                .setPositiveButton(R.string.wipe, (dialog, which) -> wipeAllData())
+                .setNegativeButton(R.string.cancel, null)
+                .show();
+    }
+
+    /**
+     * Erases everything the app has stored (messages, pictures, locations, password, call sign, contacts and
+     * settings), like "Clear data" in Android's app settings, then closes the app.
+     */
+    private void wipeAllData() {
+        wiping = true;
+        pictureQueue = null;
+        stopBeacon();
+        handler.removeCallbacksAndMessages(null);
+        stopListening();
+        if (audioTrack != null)
+            audioTrack.stop();
+        // Disconnecting gives the radio its speaker volume back
+        if (radioLink != null)
+            radioLink.disconnect();
+        password = null;
+        callSign = "";
+        draftText = "";
+        messages.clear();
+        contacts.clear();
+        sentMessagesById.clear();
+        incomingPictures.clear();
+        PasswordStore.destroy(this);
+        getPreferences(Context.MODE_PRIVATE).edit().clear().commit();
+        deleteRecursively(getFilesDir());
+        deleteRecursively(getCacheDir());
+        // Also leave no picture of the messages behind in the recent apps screen
+        finishAndRemoveTask();
+        android.app.ActivityManager am = (android.app.ActivityManager) getApplicationContext().getSystemService(Context.ACTIVITY_SERVICE);
+        // Wipes whatever is left (all preferences files, databases) and ends the app
+        if (am == null || !am.clearApplicationUserData())
+            System.exit(0);
+    }
+
+    private static void deleteRecursively(java.io.File f) {
+        java.io.File[] children = f.listFiles();
+        if (children != null)
+            for (java.io.File c : children)
+                deleteRecursively(c);
+        f.delete();
     }
 
     private void forcedQuit() {
