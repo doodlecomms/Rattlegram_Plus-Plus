@@ -847,7 +847,8 @@ public class MainActivity extends AppCompatActivity {
             for (int i = 0; i < arr.length() && i < MAX_CONTACTS; i++) {
                 JSONObject obj = arr.getJSONObject(i);
                 String cs = obj.optString("callSign", "");
-                String note = obj.optString("note", "");
+                // Notes saved by earlier versions lost the space: "Auto-added at2026-10-19 ..."
+                String note = obj.optString("note", "").replaceFirst("^(Auto-added at)(\\d)", "$1 $2");
                 if (!isBlankCallSign(cs))
                     contacts.add(new Contact(cs, note));
             }
