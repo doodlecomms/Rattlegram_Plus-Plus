@@ -186,7 +186,7 @@ The resulting text message from the COFDMTV decoder is the only data that gets s
 	<string name="contact_call_sign_empty">Call sign cannot be empty</string>
 	<string name="contact_limit_reached">Contact limit (100) reached</string>
 	<string name="contact_delete_prompt">Delete this contact?</string>
-	<string name="contact_auto_added_at">Auto-added at </string>
+	<string name="contact_auto_added_at">Auto-added at %1$s</string>
 	<string name="remember_password">Remember password on this phone</string>
 	<string name="password_remembered">Password updated and remembered on this phone</string>
 	<string name="password_remember_failed">Password updated, but it could not be saved securely on this phone. You will need to enter it again next time.</string>
