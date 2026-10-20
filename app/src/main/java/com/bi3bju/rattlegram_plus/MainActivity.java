@@ -1057,11 +1057,8 @@ public class MainActivity extends AppCompatActivity {
 
         binding.messages.setOnItemLongClickListener((adapterView, view, i, l) -> {
             String item = messages.getItem(i);
-            if (item != null) {
-                String[] mesg = item.split("\n", 2);
-                if (mesg.length == 2)
-                    transmitMessage(mesg[1], false);
-            }
+            if (item != null)
+                confirmResend(item);
             return true;
         });
         initAudioTrack();
@@ -2774,6 +2771,60 @@ public class MainActivity extends AppCompatActivity {
     }
 
     /** Handles a tap on a picture-related list entry; returns false for other entries. */
+    /**
+     * Long-press on a bubble: asks before transmitting its text again, encrypted by default when a password
+     * is set, so a message that arrived encrypted is never repeated in the clear by accident.
+     */
+    private void confirmResend(String item) {
+        String[] mesg = item.split("\n", 2);
+        if (mesg.length < 2)
+            return;
+        // Leave out the "✓ Acknowledged by" lines added under sent messages
+        StringBuilder sb = new StringBuilder();
+        for (String line : mesg[1].split("\n", -1))
+            if (!line.startsWith("✓ "))
+                sb.append(sb.length() > 0 ? "\n" : "").append(line);
+        String body = sb.toString().trim();
+        if (body.isEmpty())
+            return;
+        if (body.startsWith("📷") || body.startsWith("🔒")) {
+            Toast.makeText(this, R.string.resend_picture, Toast.LENGTH_LONG).show();
+            return;
+        }
+        if (looksEncrypted(body)) {
+            Toast.makeText(this, R.string.resend_unreadable, Toast.LENGTH_LONG).show();
+            return;
+        }
+        boolean canEncrypt = password != null && !password.isEmpty();
+        CheckBox encrypt = new CheckBox(this);
+        encrypt.setText(R.string.encrypt_message);
+        encrypt.setChecked(canEncrypt);
+        encrypt.setEnabled(canEncrypt);
+        FrameLayout box = new FrameLayout(this);
+        int pad = Math.round(20 * getResources().getDisplayMetrics().density);
+        box.setPadding(pad, 0, pad, 0);
+        box.addView(encrypt);
+        new AlertDialog.Builder(this, R.style.Theme_AlertDialog)
+                .setTitle(R.string.resend_title)
+                .setMessage(body)
+                .setView(box)
+                .setPositiveButton(R.string.resend, (d, w) -> transmitMessage(body, encrypt.isChecked()))
+                .setNegativeButton(R.string.cancel, null)
+                .show();
+    }
+
+    /** True for text that is still encryption output (a message this phone could not decrypt). */
+    private static boolean looksEncrypted(String text) {
+        if (!text.matches("[A-Za-z0-9+/=\\n]{36,}"))
+            return false;
+        try {
+            // AES-GCM output: 12-byte nonce plus 16-byte tag at least
+            return android.util.Base64.decode(text, android.util.Base64.DEFAULT).length >= 28;
+        } catch (IllegalArgumentException e) {
+            return false;
+        }
+    }
+
     private boolean handlePictureTap(String item, String content) {
         String name = pictureNameIn(item);
         if (pictureQueue != null && item.equals(pictureSendingEntry)) {
