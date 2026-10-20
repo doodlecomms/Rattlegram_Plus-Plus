@@ -2861,6 +2861,65 @@ public class MainActivity extends AppCompatActivity {
     }
 
     /** Replaces the message text below the title line of a list entry; returns the new entry. */
+    /**
+     * Decrypts received messages that arrived while the password was missing or wrong, and opens locked
+     * pictures, now that a new password is set. Messages that still do not decrypt are left as they are.
+     */
+    private void unlockStoredMessages() {
+        if (password == null || password.isEmpty())
+            return;
+        String receivedTitle = " - " + getString(R.string.received) + ":";
+        int unlocked = 0;
+        for (String entry : new ArrayList<>(Arrays.asList(storedEntries()))) {
+            int nl = entry.indexOf('\n');
+            if (nl < 0 || !entry.substring(0, nl).endsWith(receivedTitle))
+                continue;
+            String body = entry.substring(nl + 1).trim();
+            String plain = CryptoUtils.decrypt(body, password);
+            if (plain == null)
+                continue;
+            String[] hidden = HiddenCall.unwrap(plain);
+            java.util.regex.Matcher ack = ACK_PATTERN.matcher(hidden != null ? hidden[1] : plain);
+            if (ack.matches()) {
+                // An acknowledgment that arrived before the password: a matched one becomes the ✓ on our
+                // sent message, any other one a plain line, never a message bubble
+                String call = hidden != null ? hidden[0] : parseCallAndNote(entry.substring(0, nl))[0];
+                int position = messages.getPosition(entry);
+                messages.remove(entry);
+                if (!markAcknowledged(call, ack.group(1), new Date())) {
+                    String time = entry.substring(0, entry.indexOf(" - "));
+                    messages.insert(getString(R.string.title_line, time, appendContactNote(call), getString(R.string.ack_other)), position);
+                }
+                storeSettings();
+                continue;
+            }
+            if (hidden != null) {
+                autoSaveContact(hidden[0]);
+                replaceBody(replaceTitle(entry, hidden[0], getString(R.string.received_hidden)), hidden[1]);
+            } else {
+                replaceBody(entry, plain);
+            }
+            ++unlocked;
+        }
+        for (IncomingPicture in : new ArrayList<>(incomingPictures.values())) {
+            if (!in.locked)
+                continue;
+            finishIncomingPicture(in);
+            if (!in.locked)
+                ++unlocked;
+        }
+        if (unlocked > 0)
+            Toast.makeText(this, getResources().getQuantityString(R.plurals.messages_unlocked, unlocked, unlocked),
+                    Toast.LENGTH_SHORT).show();
+    }
+
+    private String[] storedEntries() {
+        String[] all = new String[messages.getCount()];
+        for (int i = 0; i < all.length; ++i)
+            all[i] = messages.getItem(i);
+        return all;
+    }
+
     /** Replaces the call sign and status in an entry's first line, keeping its time and body. */
     private String replaceTitle(String entry, String call, String info) {
         int nl = entry.indexOf('\n');
@@ -3006,17 +3065,22 @@ public class MainActivity extends AppCompatActivity {
         java.util.regex.Matcher m = ACK_PATTERN.matcher(text);
         if (!m.matches())
             return false;
-        String entry = sentMessagesById.get(m.group(1));
-        int position = entry == null ? -1 : messages.getPosition(entry);
-        if (position < 0) {
+        if (!markAcknowledged(sender, m.group(1), new Date()))
             addLine(sender, getString(R.string.ack_other));
-            return true;
-        }
-        String time = new SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(new Date());
+        return true;
+    }
+
+    /** Adds "Acknowledged by" to the sent message with this ID; false if it is not (or no longer) in the list. */
+    private boolean markAcknowledged(String sender, String id, Date when) {
+        String entry = sentMessagesById.get(id);
+        int position = entry == null ? -1 : messages.getPosition(entry);
+        if (position < 0)
+            return false;
+        String time = new SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(when);
         String updated = entry + "\n" + getString(R.string.ack_received, sender, time);
         messages.remove(entry);
         messages.insert(updated, position);
-        sentMessagesById.put(m.group(1), updated);
+        sentMessagesById.put(id, updated);
         storeSettings();
         return true;
     }
@@ -3421,6 +3485,7 @@ public class MainActivity extends AppCompatActivity {
             }
 
             password = newPassword;
+            unlockStoredMessages();
             setHideCallSign(hideCheck.isChecked());
             if (!rememberCheck.isChecked()) {
                 PasswordStore.clear(this);

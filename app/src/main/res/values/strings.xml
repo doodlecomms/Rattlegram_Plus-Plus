@@ -255,6 +255,10 @@ The resulting text message from the COFDMTV decoder is the only data that gets s
 	<string name="wipe_all_data">Wipe All Data</string>
 	<string name="wipe_all_data_prompt">Permanently erase everything Rattlegram++ has stored on this phone: all messages, pictures and locations, the password (typed and saved), your call sign, contacts and all settings. The app will close. This cannot be undone.</string>
 	<string name="wipe">Wipe</string>
+	<plurals name="messages_unlocked">
+		<item quantity="one">%d encrypted message unlocked</item>
+		<item quantity="other">%d encrypted messages unlocked</item>
+	</plurals>
 	<!-- SALUTE report -->
 	<string name="salute_button">SALUTE Report</string>
 	<string name="salute_title">SALUTE Report</string>
