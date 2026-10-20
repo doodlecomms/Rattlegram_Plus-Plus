@@ -248,6 +248,9 @@ The resulting text message from the COFDMTV decoder is the only data that gets s
 	<string name="password_clipboard_empty">Nothing to paste. Copy the password first.</string>
 	<string name="delete_messages_on_close">Delete Messages on Close</string>
 	<string name="delete_messages_on_close_prompt">All messages will be permanently deleted every time the app is closed. Enable this?</string>
+	<string name="wipe_all_data">Wipe All Data</string>
+	<string name="wipe_all_data_prompt">Permanently erase everything Rattlegram++ has stored on this phone: all messages, pictures and locations, the password (typed and saved), your call sign, contacts and all settings. The app will close. This cannot be undone.</string>
+	<string name="wipe">Wipe</string>
 	<!-- SALUTE report -->
 	<string name="salute_button">SALUTE Report</string>
 	<string name="salute_title">SALUTE Report</string>

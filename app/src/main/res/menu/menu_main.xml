@@ -17,6 +17,13 @@
         android:title="@string/ping"
         app:showAsAction="always" />
 
+    <!-- Wipe all data, always shown in red -->
+    <item
+        android:id="@+id/action_wipe_all"
+        android:icon="@drawable/ic_wipe_all_24"
+        android:title="@string/wipe_all_data"
+        app:showAsAction="always" />
+
     <!-- Encoder settings -->
     <item android:title="@string/encoder_settings">
         <menu>
