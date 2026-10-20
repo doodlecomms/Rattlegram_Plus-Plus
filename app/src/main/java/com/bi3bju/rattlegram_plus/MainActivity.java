@@ -1466,7 +1466,6 @@ public class MainActivity extends AppCompatActivity {
 
     private void updateDeleteMessagesOnCloseMenu() {
         menu.findItem(R.id.action_delete_on_close).setChecked(deleteMessagesOnClose);
-        menu.findItem(R.id.action_hide_call_sign).setChecked(hideCallSign);
     }
 
     private void setRepeaterMode(boolean newRepeaterMode) {
@@ -1724,10 +1723,6 @@ public class MainActivity extends AppCompatActivity {
         }
         if (id == R.id.action_delete_on_close) {
             toggleDeleteMessagesOnClose();
-            return true;
-        }
-        if (id == R.id.action_hide_call_sign) {
-            toggleHideCallSign();
             return true;
         }
         if (id == R.id.action_enable_ultrasonic) {
@@ -1990,10 +1985,11 @@ public class MainActivity extends AppCompatActivity {
                 .show();
     }
 
-    private void toggleHideCallSign() {
-        if (hideCallSign) {
-            hideCallSign = false;
-            updateDeleteMessagesOnCloseMenu();
+    /** Applies the password dialog's "Hide my call sign" box; turning it on needs the warning accepted first. */
+    private void setHideCallSign(boolean hide) {
+        if (!hide || hideCallSign) {
+            hideCallSign = hide;
+            storeSettings();
             return;
         }
         new AlertDialog.Builder(this, R.style.Theme_AlertDialog)
@@ -2001,10 +1997,15 @@ public class MainActivity extends AppCompatActivity {
                 .setMessage(R.string.hide_call_sign_prompt)
                 .setPositiveButton(R.string.enable, (dialog, which) -> {
                     hideCallSign = true;
-                    updateDeleteMessagesOnCloseMenu();
+                    storeSettings();
                 })
                 .setNegativeButton(R.string.cancel, null)
                 .show();
+    }
+
+    /** Shows the "call sign hidden" note under an Encrypt box while an encrypted message would hide it. */
+    private void updateHiddenNote(TextView note, CheckBox encrypt) {
+        note.setVisibility(encrypt.isChecked() && encrypt.isEnabled() && hidingCallSign() ? View.VISIBLE : View.GONE);
     }
 
     /** True when an encrypted transmission should carry the call sign inside the encryption instead of the header. */
@@ -2159,8 +2160,11 @@ public class MainActivity extends AppCompatActivity {
         };
         edit.addTextChangedListener(textWatcher);
 
+        TextView hiddenNote = view.findViewById(R.id.call_sign_hidden_note);
+        updateHiddenNote(hiddenNote, encryptCheck);
         encryptCheck.setOnCheckedChangeListener((buttonView, isChecked) -> {
             encryptMessage = isChecked;
+            updateHiddenNote(hiddenNote, encryptCheck);
             String text = edit.getText().toString();
             textWatcher.onTextChanged(text, 0, 0, 0);
         });
@@ -2602,7 +2606,12 @@ public class MainActivity extends AppCompatActivity {
         };
         sizeGroup.setOnCheckedChangeListener((group, id) -> update.run());
         robustCheck.setOnCheckedChangeListener((b, c) -> update.run());
-        encryptCheck.setOnCheckedChangeListener((b, c) -> update.run());
+        TextView hiddenNote = view.findViewById(R.id.call_sign_hidden_note);
+        encryptCheck.setOnCheckedChangeListener((b, c) -> {
+            updateHiddenNote(hiddenNote, encryptCheck);
+            update.run();
+        });
+        updateHiddenNote(hiddenNote, encryptCheck);
         update.run();
     }
 
@@ -3268,6 +3277,8 @@ public class MainActivity extends AppCompatActivity {
         Button okButton = view.findViewById(R.id.button_okay);
         CheckBox rememberCheck = view.findViewById(R.id.remember_password);
         rememberCheck.setChecked(PasswordStore.isRemembered(this));
+        CheckBox hideCheck = view.findViewById(R.id.hide_call_sign);
+        hideCheck.setChecked(hideCallSign);
 
         editText.setText(password);
         editText.setSelection(password.length());
@@ -3334,6 +3345,7 @@ public class MainActivity extends AppCompatActivity {
             if (newPassword.isEmpty()) {
                 password = "";
                 PasswordStore.clear(this);
+                setHideCallSign(hideCheck.isChecked());
                 errorText.setVisibility(View.GONE);
                 Toast.makeText(this, R.string.password_updated, Toast.LENGTH_SHORT).show();
                 dialog.dismiss();
@@ -3348,6 +3360,7 @@ public class MainActivity extends AppCompatActivity {
             }
 
             password = newPassword;
+            setHideCallSign(hideCheck.isChecked());
             if (!rememberCheck.isChecked()) {
                 PasswordStore.clear(this);
                 Toast.makeText(this, R.string.password_updated, Toast.LENGTH_SHORT).show();
