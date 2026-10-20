@@ -906,7 +906,7 @@ public class MainActivity extends AppCompatActivity {
         }
 
         contacts.add(new Contact(senderCall,
-                getString(R.string.contact_auto_added_at) + currentTime()));
+                getString(R.string.contact_auto_added_at, currentTime())));
         saveContacts();
     }
 
