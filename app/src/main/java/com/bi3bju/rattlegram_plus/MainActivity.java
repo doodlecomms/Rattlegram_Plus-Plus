@@ -2791,6 +2791,51 @@ public class MainActivity extends AppCompatActivity {
     }
 
     /** Replaces the message text below the title line of a list entry; returns the new entry. */
+    /**
+     * Decrypts received messages that arrived while the password was missing or wrong, and opens locked
+     * pictures, now that a new password is set. Messages that still do not decrypt are left as they are.
+     */
+    private void unlockStoredMessages() {
+        if (password == null || password.isEmpty())
+            return;
+        String receivedTitle = " - " + getString(R.string.received) + ":";
+        int unlocked = 0;
+        for (String entry : new ArrayList<>(Arrays.asList(storedEntries()))) {
+            int nl = entry.indexOf('\n');
+            if (nl < 0 || !entry.substring(0, nl).endsWith(receivedTitle))
+                continue;
+            String body = entry.substring(nl + 1).trim();
+            String plain = CryptoUtils.decrypt(body, password);
+            if (plain == null)
+                continue;
+            String[] hidden = HiddenCall.unwrap(plain);
+            if (hidden != null) {
+                autoSaveContact(hidden[0]);
+                replaceBody(replaceTitle(entry, hidden[0], getString(R.string.received_hidden)), hidden[1]);
+            } else {
+                replaceBody(entry, plain);
+            }
+            ++unlocked;
+        }
+        for (IncomingPicture in : new ArrayList<>(incomingPictures.values())) {
+            if (!in.locked)
+                continue;
+            finishIncomingPicture(in);
+            if (!in.locked)
+                ++unlocked;
+        }
+        if (unlocked > 0)
+            Toast.makeText(this, getResources().getQuantityString(R.plurals.messages_unlocked, unlocked, unlocked),
+                    Toast.LENGTH_SHORT).show();
+    }
+
+    private String[] storedEntries() {
+        String[] all = new String[messages.getCount()];
+        for (int i = 0; i < all.length; ++i)
+            all[i] = messages.getItem(i);
+        return all;
+    }
+
     /** Replaces the call sign and status in an entry's first line, keeping its time and body. */
     private String replaceTitle(String entry, String call, String info) {
         int nl = entry.indexOf('\n');
@@ -3348,6 +3393,7 @@ public class MainActivity extends AppCompatActivity {
             }
 
             password = newPassword;
+            unlockStoredMessages();
             if (!rememberCheck.isChecked()) {
                 PasswordStore.clear(this);
                 Toast.makeText(this, R.string.password_updated, Toast.LENGTH_SHORT).show();
