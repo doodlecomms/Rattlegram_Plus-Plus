@@ -13,6 +13,8 @@ import androidx.activity.result.PickVisualMediaRequest;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.biometric.BiometricManager;
+import androidx.biometric.BiometricPrompt;
 import androidx.appcompat.app.AppCompatDelegate;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
@@ -147,6 +149,10 @@ public class MainActivity extends AppCompatActivity {
     private boolean repeaterMode;
     private boolean encryptMessage;
     private boolean deleteMessagesOnClose;
+    /** Covers the screen until the phone's own lock (fingerprint, face or PIN) confirms the user. */
+    private View lockCover;
+    private static final int LOCK_AUTHENTICATORS =
+            BiometricManager.Authenticators.BIOMETRIC_WEAK | BiometricManager.Authenticators.DEVICE_CREDENTIAL;
     private boolean hideCallSign;
     /** Set while wiping all data, so nothing gets saved again on the way out. */
     private boolean wiping;
@@ -1031,6 +1037,12 @@ public class MainActivity extends AppCompatActivity {
             password = rememberedPassword;
         setContentView(binding.getRoot());
         setTitle(R.string.app_title);
+        // Optional app lock: only asks when the app is opened fresh, not after a rotation
+        if (isAppLockEnabled()) {
+            getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
+            if (state == null)
+                lockApp();
+        }
         handleInsets();
         stagedCFO = new float[1];
         stagedMode = new int[1];
@@ -1468,6 +1480,7 @@ public class MainActivity extends AppCompatActivity {
 
     private void updateDeleteMessagesOnCloseMenu() {
         menu.findItem(R.id.action_delete_on_close).setChecked(deleteMessagesOnClose);
+        menu.findItem(R.id.action_app_lock).setChecked(isAppLockEnabled());
     }
 
     private void setRepeaterMode(boolean newRepeaterMode) {
@@ -1686,6 +1699,13 @@ public class MainActivity extends AppCompatActivity {
     @Override
     public boolean onOptionsItemSelected(MenuItem item) {
         int id = item.getItemId();
+        if (lockCover != null)
+            return true;
+
+        if (id == R.id.action_app_lock) {
+            toggleAppLock();
+            return true;
+        }
 
         if (id == R.id.action_ping) {
             toggleBeacon();
@@ -2074,6 +2094,90 @@ public class MainActivity extends AppCompatActivity {
             for (java.io.File c : children)
                 deleteRecursively(c);
         f.delete();
+    }
+
+    private boolean isAppLockEnabled() {
+        return getPreferences(Context.MODE_PRIVATE).getBoolean("appLock", false);
+    }
+
+    private boolean canUsePhoneLock() {
+        return BiometricManager.from(this).canAuthenticate(LOCK_AUTHENTICATORS) == BiometricManager.BIOMETRIC_SUCCESS;
+    }
+
+    /** Turning the lock on asks for the phone's lock once, so nobody enables a lock they cannot open. */
+    private void toggleAppLock() {
+        if (isAppLockEnabled()) {
+            getPreferences(Context.MODE_PRIVATE).edit().putBoolean("appLock", false).apply();
+            getWindow().clearFlags(WindowManager.LayoutParams.FLAG_SECURE);
+            updateDeleteMessagesOnCloseMenu();
+            return;
+        }
+        if (!canUsePhoneLock()) {
+            Toast.makeText(this, R.string.app_lock_needs_screen_lock, Toast.LENGTH_LONG).show();
+            updateDeleteMessagesOnCloseMenu();
+            return;
+        }
+        askPhoneLock(() -> {
+            getPreferences(Context.MODE_PRIVATE).edit().putBoolean("appLock", true).apply();
+            getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
+            updateDeleteMessagesOnCloseMenu();
+            Toast.makeText(this, R.string.app_lock_enabled, Toast.LENGTH_LONG).show();
+        });
+    }
+
+    private void askPhoneLock(Runnable onSuccess) {
+        BiometricPrompt prompt = new BiometricPrompt(this, ContextCompat.getMainExecutor(this),
+                new BiometricPrompt.AuthenticationCallback() {
+                    @Override
+                    public void onAuthenticationSucceeded(@NonNull BiometricPrompt.AuthenticationResult result) {
+                        onSuccess.run();
+                    }
+                });
+        prompt.authenticate(new BiometricPrompt.PromptInfo.Builder()
+                .setTitle(getString(R.string.app_lock_title))
+                .setSubtitle(getString(R.string.app_lock_subtitle))
+                .setAllowedAuthenticators(LOCK_AUTHENTICATORS)
+                .build());
+    }
+
+    /** Hides everything behind a cover with an Unlock button and asks for the phone's lock. */
+    private void lockApp() {
+        if (!canUsePhoneLock()) {
+            // Never lock someone out: without a screen lock there is nothing to unlock with
+            Toast.makeText(this, R.string.app_lock_no_screen_lock, Toast.LENGTH_LONG).show();
+            return;
+        }
+        android.util.TypedValue bg = new android.util.TypedValue();
+        getTheme().resolveAttribute(android.R.attr.colorBackground, bg, true);
+        LinearLayout cover = new LinearLayout(this);
+        cover.setOrientation(LinearLayout.VERTICAL);
+        cover.setGravity(Gravity.CENTER);
+        cover.setBackgroundColor(bg.data);
+        cover.setClickable(true);
+        TextView title = new TextView(this);
+        title.setText(R.string.app_locked);
+        title.setTextSize(20);
+        title.setGravity(Gravity.CENTER);
+        Button unlock = new Button(this);
+        unlock.setText(R.string.unlock);
+        unlock.setOnClickListener(v -> askPhoneLock(this::unlockApp));
+        cover.addView(title);
+        cover.addView(unlock);
+        addContentView(cover, new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        lockCover = cover;
+        if (getSupportActionBar() != null)
+            getSupportActionBar().hide();
+        // Ask once the screen is up, not in the middle of starting the app
+        cover.post(() -> askPhoneLock(this::unlockApp));
+    }
+
+    private void unlockApp() {
+        if (lockCover == null)
+            return;
+        ((ViewGroup) lockCover.getParent()).removeView(lockCover);
+        lockCover = null;
+        if (getSupportActionBar() != null)
+            getSupportActionBar().show();
     }
 
     private void forcedQuit() {
