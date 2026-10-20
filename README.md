@@ -18,6 +18,10 @@ Rattlegram Plus Plus is an independent fork of [Rattlegram Plus](https://github.
 
 ## What's new in Plus Plus
 
+- 🕵️ **Hide your call sign** *(new in 1.2)* — Danger Zone → Password → "Hide my call sign in encrypted messages". Encrypted messages, locations, pictures and acknowledgments then go out as **ANONYMOUS**; your call sign travels inside the encryption, so only stations with the password (and 1.2 or newer) see who sent them. Off by default; a "🔒 Call sign hidden" note shows under the Encrypt box while it applies. Amateur bands require station identification, so use it only where that is legal.
+- 🧨 **Wipe All Data** *(new in 1.2)* — the red button in the top bar erases everything the app has stored (messages, pictures, locations, password, call sign, contacts, settings) after one confirmation, removes the app from Recent apps and closes it.
+- 🔓 **Unlock later** *(new in 1.2)* — encrypted messages that arrived before you had the right password are decrypted as soon as you enter it, including hidden call signs and locked pictures.
+- 🔁 **Safer resend** *(new in 1.2)* — long-pressing a message now asks before sending it again, encrypted when a password is set, and warns when it can only go out unencrypted.
 - 🖼️ **Pictures** *(new in 1.1)* — Compose → Picture: take a photo or pick one, choose Small/Medium/Large, optionally Robust and Encrypt. It goes out as a series of ordinary Rattlegram messages with spare parts, so a few lost parts are rebuilt automatically. Photo metadata (GPS location, time, camera) is removed; only the pixels are sent.
 - ✅ **Acknowledgments** *(new in 1.1)* — Menu → Acknowledgments: Off, Messages addressed to me (`@CALL ...`), or All messages. The sender's message gets "✓ Acknowledged by …". Your radio transmits the short ACK on its own, so it is off by default.
 - 🔐 **Remember password** *(new in 1.1)* — optional; stored encrypted with a key that never leaves the phone and excluded from backups.
@@ -68,7 +72,7 @@ Compose → **Picture**, then take a photo or choose one. The preview shows the 
 
 ## Sharing the encryption password
 
-Danger Zone → Password: **Generate Random Password**, then **Show QR** on one phone and **Scan QR** (or Paste) on the other, and tap Okay on both. Anyone who sees the QR code can read your encrypted messages, so only show it to people you trust. The app does not save the password between launches.
+Danger Zone → Password: **Generate Random Password**, then **Show QR** on one phone and **Scan QR** (or Paste) on the other, and tap Okay on both. Anyone who sees the QR code can read your encrypted messages, so only show it to people you trust. The password is only kept between launches if you tick **Remember password on this phone**.
 
 ## Building from source
 
